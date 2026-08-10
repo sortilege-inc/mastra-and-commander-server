@@ -17,8 +17,12 @@
 import * as React from 'react'
 import type { BoardProps } from 'boardgame.io/react'
 import type { MCState } from './types'
-import { PHASE_BLURB, ROUND_PHASES } from './constants'
+import {
+  PHASE_BLURB, RAG_CHAPTERS, RAG_RERANK_INDEX, RAG_UPSERT_INDEX, ROUND_PHASES,
+} from './constants'
 import type { RoundPhase } from './constants'
+import type { CallTarget } from './types'
+import { getOperatorCard } from './cards/registry'
 import { useGameMode } from '../../framework/ModeContext'
 import { ContextRow } from './ContextRow'
 import { HandPanel } from './HandPanel'
@@ -69,6 +73,27 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
 
   const gameover = ctx.gameover as { winner?: string } | undefined
 
+  /** The RAG chapter that can be advanced next, if any. */
+  const nextRagChapter = RAG_CHAPTERS[G.rag.chaptersComplete] ?? null
+  /** Upsert sets RAG's payload; Rerank swaps it — both consume a card. */
+  const ragNeedsCard = G.rag.chaptersComplete === RAG_UPSERT_INDEX
+    || G.rag.chaptersComplete === RAG_RERANK_INDEX
+
+  /** Everything currently callable with a face-down card. */
+  const callTargets: Array<{ target: CallTarget; label: string }> = [
+    ...G.servers.map((server, index) => ({
+      target: { kind: 'server' as const, index },
+      label: `${getOperatorCard(server.traitCardId).name} (server)`,
+    })),
+    ...G.skillAttachments.map((attachment) => ({
+      target: { kind: 'skill' as const, equipmentId: attachment.equipmentId },
+      label: `${getOperatorCard(attachment.skillCardId).name} (skill)`,
+    })),
+    ...(G.rag.chaptersComplete > RAG_UPSERT_INDEX
+      ? [{ target: { kind: 'rag' as const }, label: 'RAG' }]
+      : []),
+  ]
+
   return (
     <div style={{
       padding: 20, color: C.text, background: C.bg, minHeight: '100vh',
@@ -113,11 +138,25 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
         >
           Advance phase →
         </button>
-        {G.phase === 'play' && G.contexts.length < G.processLimit && (
+        {G.phase === 'play'
+          && G.contexts.filter((c) => c.parentChainIx === null).length < G.processLimit && (
           <button style={btn()} onClick={() => moves.openProcess()}>Open Process</button>
         )}
-        {G.phase === 'play' && G.ragSteps.length > 0 && (
-          <button style={btn()} onClick={() => moves.resetRag()}>Reset RAG</button>
+        {G.phase === 'play' && nextRagChapter && (
+          <button
+            style={btn()}
+            onClick={() => {
+              // Upsert and Rerank consume a card from hand; the rest don't.
+              const card = ragNeedsCard ? (pitches[0] ?? null) : null
+              moves.advanceRag(ragNeedsCard ? pitches.slice(1) : pitches, card)
+              clearPitches()
+            }}
+            title={ragNeedsCard
+              ? `Mark the payload card first, then any pitches. Costs ${nextRagChapter.cost}.`
+              : `Costs ${nextRagChapter.cost}.`}
+          >
+            RAG: {nextRagChapter.name} ({nextRagChapter.cost})
+          </button>
         )}
         {G.phase === 'entropy' && G.entropyStack.length > 0 && mode !== 'vs-ai' && (
           <button
@@ -129,7 +168,14 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
         )}
         {substrate && (
           <span style={{ color: C.warn, fontSize: '0.82rem', alignSelf: 'center' }}>
-            substrate staged — click “install” on an MCP/Skill/Tool card
+            “{getOperatorCard(substrate).name}” staged as the face-down substrate —
+            now click <strong>install</strong> on a Tool.
+          </span>
+        )}
+        {G.phase === 'play' && callTargets.length > 0 && (
+          <span style={{ color: C.dim, fontSize: '0.82rem', alignSelf: 'center' }}>
+            {callTargets.length} installed resource{callTargets.length === 1 ? '' : 's'} —
+            use <strong>call</strong> on any hand card to invoke one, free.
           </span>
         )}
       </div>
@@ -168,18 +214,24 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
               moves.playResponse(cardId, pitches.filter((id) => id !== cardId), 0, 0)
               clearPitches()
             }}
-            onCommander={(cardId) => { moves.useCommanderAbility(cardId); clearPitches() }}
-            onRag={(cardId) => { moves.buildRagStep(cardId); clearPitches() }}
+            callTargets={callTargets}
+            onCall={(cardId, target) => {
+              moves.callInstalled(0, cardId, target)
+              clearPitches()
+            }}
+            onAttachSkill={(cardId, equipmentId) => {
+              moves.attachSkill(equipmentId, cardId, pitches.filter((id) => id !== cardId))
+              clearPitches()
+            }}
             onClaw={(cardId) => { moves.loadClaw(cardId); clearPitches() }}
             onUpgrade={(cardId) => {
               moves.upgradeModel(cardId, pitches.filter((id) => id !== cardId))
               clearPitches()
             }}
-            onInstall={(cardId) => {
-              if (!substrate) {
-                setSubstrate(cardId)
-                return
-              }
+            onStageSubstrate={setSubstrate}
+            onInstallTool={(cardId) => {
+              // A server needs a face-down substrate under the Tool.
+              if (!substrate || substrate === cardId) return
               moves.installServer(substrate, cardId, pitches.filter(
                 (id) => id !== cardId && id !== substrate,
               ))

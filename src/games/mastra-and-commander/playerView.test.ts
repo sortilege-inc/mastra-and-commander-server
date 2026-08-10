@@ -60,6 +60,8 @@ describe('playerView — Entropy seat', () => {
     const G = emptyGameState()
     G.contexts[0]!.slots.push({
       cardId: 'TEST-OP-AGENT',
+      faceDown: false,
+      calls: null,
       outputsRemaining: { capital: 0, attention: 0, technology: 0, generic: 0 },
       relayed: false,
       subverted: false,

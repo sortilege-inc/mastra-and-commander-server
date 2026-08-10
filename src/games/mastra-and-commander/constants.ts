@@ -102,11 +102,49 @@ export type Ecosystem = typeof ECOSYSTEMS[number]
 
 // ── Economy tunables ──
 
-export const STARTING_HAND_SIZE = 5
-
 /** Cards fed to Entropy per Operator play/pitch. Locked at ≥1; some cards feed
  *  more than 1:1 (per-card `entropyFeed`). */
 export const DEFAULT_ENTROPY_FEED = 1
+
+// ── Placement costs (owner ruling, 2026-08-10) ──
+// A Tool or Skill can be INSTALLED (expensive, persists, gains Durable) or
+// played INLINE into the Context (cheap, discards at round end). Once
+// installed, you reach it by playing a card face-down as a CALL — free.
+
+/** Installing a Tool as an MCP server: the Tool plus a face-down substrate,
+ *  one Entropy per card. */
+export const TOOL_SERVER_ENTROPY = 2
+/** Playing a Tool or Skill inline into the Context instead. No Durable. */
+export const INLINE_PLACEMENT_ENTROPY = 1
+/** Attaching a Skill to a loadout item (rig / cloud). Gains Durable. */
+export const SKILL_ATTACH_ENTROPY = 1
+/** Playing a card face-down to CALL an installed Tool / Skill / RAG. Free —
+ *  the Entropy was paid when you installed it. */
+export const CALL_ENTROPY = 0
+
+/**
+ * Entropy fed per pitched card, by how well its Contribution matches the
+ * Contribution of the card being paid for (owner ruling, 2026-08-10).
+ *
+ * Pitching is ALWAYS legal — the pitched card's cost no longer has to share a
+ * type. What varies is the price: feed the work something like itself and it
+ * costs you little; burn something unrelated and it costs you three.
+ */
+export const PITCH_ENTROPY = {
+  /** Same color AND same shape. */
+  exact: 1,
+  /** Same color OR same shape. */
+  partial: 2,
+  /** Neither. */
+  none: 3,
+} as const
+
+/**
+ * The Operator's hand is always refilled to this size (owner ruling,
+ * 2026-08-10) — after plays, pitches, and Entropy resolution alike. The hand is
+ * a constant; the DECK is what depletes, and running it out ends the game.
+ */
+export const HAND_SIZE = 5
 
 /** Locked (design §4 success ladder): scrapping your own engine on a failed
  *  eval sheds Entropy. */
@@ -116,10 +154,31 @@ export const SCRAP_REMOVES = { durable: 3, setup: 5 } as const
  *  is how much. */
 export const LESSER_ENTROPY_PENALTY = 1
 
-// ── RAG (design §4 — 4 steps locked; the rest BEST-GUESS(Q5)) ──
+// ── RAG — the setup saga (owner ruling, 2026-08-10) ──
+//
+// RAG is in play from setup and advances like an MtG Saga: each chapter costs
+// one pip, and each chapter wants a DIFFERENT type, so the track can't be
+// rushed on a single color. Upsert takes a card whose Contribution becomes
+// RAG's payload; Rerank can swap that payload for another of equal size.
 
-export const RAG_STEP_COUNT = 4
-/** BEST-GUESS(Q5): "removes some of the Entropy stack at random" — how many. */
+export const RAG_CHAPTERS = [
+  { key: 'chunk', name: 'Chunk', cost: 'technology' },
+  { key: 'embed', name: 'Embed', cost: 'attention' },
+  { key: 'insert', name: 'Insert', cost: 'capital' },
+  { key: 'upsert', name: 'Upsert', cost: 'generic' },
+  { key: 'rerank', name: 'Rerank', cost: 'technology' },
+] as const satisfies ReadonlyArray<{ key: string; name: string; cost: Pip }>
+
+export type RagChapterKey = typeof RAG_CHAPTERS[number]['key']
+
+/** Index of the chapter whose fed card sets RAG's contribution. */
+export const RAG_UPSERT_INDEX = 3
+/** Index of the optional final chapter. Everything before it is required. */
+export const RAG_RERANK_INDEX = 4
+/** Chapters that must be completed for RAG to produce anything. */
+export const RAG_REQUIRED_CHAPTERS = RAG_RERANK_INDEX
+
+/** BEST-GUESS(Q5): Entropy cleared when the required chapters complete. */
 export const RAG_CLEAR_COUNT = 3
 
 // ── Claw (design §4 — BEST-GUESS(Q7): completion condition is ❓) ──
@@ -147,24 +206,37 @@ export const STARTING_MODEL_ID = 'TEST-MODEL-SMALL'
 /** BEST-GUESS(Q10): each complete server grants this much at Reveal. */
 export const SERVER_GRANT: Pip[] = ['generic']
 
-// ── Commander (design §4 — always in play; ability is a PLACEHOLDER) ──
+// ── Commander — Mastra (design §4; ability set by owner 2026-08-10) ──
 //
-// BEST-GUESS: the printed Mastra card in cards.yml is explicitly NOT canonical
-// (owner: pending redesign), so the engine's commander is a placeholder that
-// exercises the pitch-for-resources path without claiming to be the real card.
+// Passive, not activated: the first Agent played each round costs nothing and
+// feeds no Entropy. The framework gives you one agent free; everything after it
+// is on you.
 
-export const COMMANDER_ID = 'TEST-COMMANDER'
-/** The currency a card's own cost must share to pitch it to the commander. */
-export const COMMANDER_ABILITY_PIP: Currency = 'attention'
-/** What the commander ability grants into the round pool. */
-export const COMMANDER_GRANT: Pip[] = ['technology', 'technology', 'technology']
+export const COMMANDER_ID = 'MASTRA'
+/** Trait the commander's free play applies to. */
+export const COMMANDER_FREE_TRAIT = 'Agent'
 
-// ── Match structure (BEST-GUESS(Q13): scoring/win is 🟨) ──
+// ── Match structure (owner ruling, 2026-08-10: a game is 3 evals) ──
 
-export const MATCH_ROUNDS = 5
+export const MATCH_ROUNDS = 3
 /** Eval passes the Operator needs to win the match. `lesser` counts as a pass. */
-export const MATCH_WIN_PASSES = 3
+export const MATCH_WIN_PASSES = 2
 
 // ── Processes (design §4 — one by default is locked; what closes one is ❓Q15) ──
 
 export const DEFAULT_PROCESS_LIMIT = 1
+
+// ── Context ceiling (owner ruling, 2026-08-10) ──
+
+/**
+ * How many cards a single context window may hold. An Objective may override
+ * it (`EvalCardDef.contextCeiling`).
+ *
+ * A **Subagent** opens its own context with the same ceiling, and the cards in
+ * it do NOT count against the parent's ceiling — which is exactly why you
+ * delegate: it is the only way to do more work than one window can hold.
+ */
+export const DEFAULT_CONTEXT_CEILING = 7
+
+/** Trait that spawns a nested sub-context when played. */
+export const TRAIT_SUBAGENT = 'Subagent'

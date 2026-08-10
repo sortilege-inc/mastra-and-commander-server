@@ -132,6 +132,10 @@ export interface EvalCardDef {
   patterns: EvalPattern[]
   /** Context size at or under which the pass counts as `best` (design: par). */
   par: number
+  /** Hard cap on how many cards one context window may hold. Defaults to
+   *  DEFAULT_CONTEXT_CEILING (7) when omitted. Subagent sub-contexts get their
+   *  own ceiling of the same size. */
+  contextCeiling?: number
   /** Context size at or under which the pass counts as `superior`. Only some
    *  evals offer a superior band (locked: "occasional evals"). */
   superiorAt?: number
@@ -141,6 +145,15 @@ export interface EvalCardDef {
 }
 
 // ── Supporting card kinds ─────────────────────────────────────────────────
+
+/**
+ * The "size" of a contribution set — its number of icons.
+ *
+ * RAG's Rerank chapter may swap its payload for another of EQUAL size, so this
+ * is the comparison that rule turns on.
+ */
+export const contributionSize = (contributions: Contribution[]): number =>
+  contributions.length
 
 /** Features deck (design §4): no Entropy cost, each adds a play pattern. */
 export interface FeatureCardDef {
@@ -172,14 +185,16 @@ export interface ModelDef {
   rulesText: string
 }
 
-/** The commander in the command zone (design §4). Always available.
- *  The real Mastra card is pending redesign — this is a placeholder. */
+/**
+ * The commander in the command zone (design §4). Always in play.
+ *
+ * Mastra's ability is PASSIVE, not activated: the first card with
+ * `freeTrait` played each round costs nothing and feeds no Entropy.
+ */
 export interface CommanderDef {
   id: string
   name: string
-  /** A pitched card's own cost must share this currency. */
-  abilityCostPip: Pip
-  /** What the ability grants into the round pool. */
-  abilityGrant: Pip[]
+  /** Trait whose first play each round is free (cost and Entropy). */
+  freeTrait: string
   rulesText: string
 }

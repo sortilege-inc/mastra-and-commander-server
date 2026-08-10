@@ -6,7 +6,9 @@
  * these tests are the spec that has to be rewritten alongside it.
  */
 import { describe, expect, it } from 'vitest'
-import { canPitchFor, planPayment, toPipCounts, totalPips, zeroPips } from './ioFlow'
+import {
+  lastPayingSlot, pitchEntropyFor, planPayment, toPipCounts, totalPips, zeroPips,
+} from './ioFlow'
 import { getOperatorCard } from '../cards/registry'
 
 const noSources = () => ({ prevOutputs: zeroPips(), roundPool: zeroPips() })
@@ -20,19 +22,44 @@ describe('toPipCounts', () => {
   })
 })
 
-describe('canPitchFor', () => {
-  const agent = getOperatorCard('TEST-OP-AGENT') // consume: [technology]
+describe('pitchEntropyFor — the 1/2/3 contribution scale', () => {
+  // Agent contributes cyan ●; Subagent cyan ▲; Workflow-A amber ●;
+  // Durable Agent green ⬟.
+  const agent = getOperatorCard('TEST-OP-AGENT')
 
-  it('accepts any card for a generic pip', () => {
-    expect(canPitchFor(agent, 'generic')).toBe(true)
+  it('charges 1 for an exact match (same color AND shape)', () => {
+    const result = pitchEntropyFor(agent, agent)
+    expect(result.match).toBe('exact')
+    expect(result.entropy).toBe(1)
   })
 
-  it('accepts a card whose own cost shares the type', () => {
-    expect(canPitchFor(agent, 'technology')).toBe(true)
+  it('charges 2 for a color-only match', () => {
+    const result = pitchEntropyFor(getOperatorCard('TEST-OP-SUBAGENT'), agent)
+    expect(result.match).toBe('partial')
+    expect(result.entropy).toBe(2)
   })
 
-  it('rejects a card whose cost does not share the type', () => {
-    expect(canPitchFor(agent, 'capital')).toBe(false)
+  it('charges 2 for a shape-only match', () => {
+    const result = pitchEntropyFor(getOperatorCard('TEST-OP-WORKFLOW-A'), agent)
+    expect(result.match).toBe('partial')
+    expect(result.entropy).toBe(2)
+  })
+
+  it('charges 3 when neither matches', () => {
+    const result = pitchEntropyFor(getOperatorCard('TEST-OP-DURABLE-AGENT'), agent)
+    expect(result.match).toBe('none')
+    expect(result.entropy).toBe(3)
+  })
+
+  it('takes the BEST match across multi-contribution cards', () => {
+    // Supervisor contributes cyan ■ AND cyan ● — the latter matches Agent
+    // exactly, so it should be priced as exact, not partial.
+    const result = pitchEntropyFor(getOperatorCard('TEST-OP-SUPERVISOR'), agent)
+    expect(result.match).toBe('exact')
+  })
+
+  it('falls to the `none` tier with nothing to compare against', () => {
+    expect(pitchEntropyFor(agent, null).match).toBe('none')
   })
 })
 
@@ -103,15 +130,9 @@ describe('planPayment — pitching', () => {
     expect(exact.ok).toBe(true)
   })
 
-  it('rejects a pitch that does not share the pip type', () => {
-    // Agent's cost is [technology]; it cannot pay a capital pip.
-    const result = planPayment(['capital'], noSources(), [getOperatorCard('TEST-OP-AGENT')])
-    expect(result.ok).toBe(false)
-  })
-
   it('assigns constrained typed pips before generic ones', () => {
     // Cost is technology + generic. Only the Agent can pay technology, so the
-    // greedy assignment must not waste it on the generic pip.
+    // assignment must not waste it on the generic pip.
     const result = planPayment(['technology', 'generic'], noSources(), [
       getOperatorCard('TEST-OP-SCRATCHPAD'), // cost [] — generic only
       getOperatorCard('TEST-OP-AGENT'),      // cost [technology]
@@ -122,28 +143,77 @@ describe('planPayment — pitching', () => {
   })
 })
 
+describe('planPayment — pitching is always legal', () => {
+  it('accepts a card whose cost shares nothing with the pip', () => {
+    // Under the old rule this was illegal. Now it is merely priced.
+    const result = planPayment(
+      ['capital'], noSources(), [getOperatorCard('TEST-OP-AGENT')],
+      getOperatorCard('TEST-OP-AGENT'),
+    )
+    expect(result.ok).toBe(true)
+  })
+
+  it('prices each pitch off the card being paid for', () => {
+    const agent = getOperatorCard('TEST-OP-AGENT')
+    const result = planPayment(
+      ['capital', 'capital'], noSources(),
+      [agent, getOperatorCard('TEST-OP-DURABLE-AGENT')],
+      agent,
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // Agent vs Agent = exact (1); Durable Agent (green ⬟) vs Agent = none (3).
+    expect(result.plan.pitches.map((p) => p.entropy)).toEqual([1, 3])
+  })
+
+  it('still requires exactly one pitch per unmet pip', () => {
+    const result = planPayment(['technology', 'capital'], noSources(), [
+      getOperatorCard('TEST-OP-SCRATCHPAD'),
+    ])
+    expect(result.ok).toBe(false)
+  })
+})
+
+describe('lastPayingSlot — face-down cards are skipped for I/O', () => {
+  it('looks through a face-down call to the last face-up card', () => {
+    const slots = [
+      { faceDown: false, id: 'a' },
+      { faceDown: true, id: 'call' },
+    ]
+    expect(lastPayingSlot(slots)?.id).toBe('a')
+  })
+
+  it('returns undefined when every slot is face-down', () => {
+    expect(lastPayingSlot([{ faceDown: true, id: 'call' }])).toBeUndefined()
+  })
+
+  it('returns undefined for an empty chain', () => {
+    expect(lastPayingSlot([])).toBeUndefined()
+  })
+})
+
 describe('planPayment — ecosystem discount', () => {
   it('waives generic pips up to the discount', () => {
-    const result = planPayment(['generic', 'generic'], noSources(), [], 1)
+    const result = planPayment(['generic', 'generic'], noSources(), [], null, 1)
     expect(result.ok).toBe(false) // one generic still unpaid, no pitch offered
 
     const withPitch = planPayment(['generic', 'generic'], noSources(), [
       getOperatorCard('TEST-OP-AGENT'),
-    ], 1)
+    ], null, 1)
     expect(withPitch.ok).toBe(true)
     if (!withPitch.ok) return
     expect(withPitch.plan.discounted).toBe(1)
   })
 
   it('never discounts more generic pips than the cost contains', () => {
-    const result = planPayment(['generic'], noSources(), [], 5)
+    const result = planPayment(['generic'], noSources(), [], null, 5)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.plan.discounted).toBe(1)
   })
 
   it('does not discount typed pips', () => {
-    const result = planPayment(['technology'], noSources(), [], 3)
+    const result = planPayment(['technology'], noSources(), [], null, 3)
     expect(result.ok).toBe(false)
   })
 })

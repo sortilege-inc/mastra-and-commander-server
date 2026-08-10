@@ -5,7 +5,8 @@
  * the state shape grows — a field added to MCState appears here automatically.
  * (Same reasoning as tcggg's testing/fixtures.ts.)
  */
-import type { MCState } from '../types'
+import type { CallTarget, MCState } from '../types'
+import { DEFAULT_CONTEXT_CEILING } from '../constants'
 import { buildInitialState, type RandomAPI } from '../rules/setup'
 import { enterReveal } from '../rules/phaseHelpers'
 import { zeroPips } from '../rules/ioFlow'
@@ -50,11 +51,21 @@ export function freshGameState(): MCState {
 export function emptyGameState(): MCState {
   const G = freshGameState()
   G.operatorHand = []
-  G.operatorDeck = []
+  // A small stock deck. NOT empty: an empty deck now means "the Operator has
+  // cycled their deck", which ends the match — so a zero-length deck here would
+  // silently end every test that rolls a round over. Tests that specifically
+  // want an exhausted deck set it themselves.
+  G.operatorDeck = Array(20).fill('TEST-OP-SCRATCHPAD')
   // enterReveal has already run the equipment auto-pitch, so the discard is
   // non-empty by the time we get here. Clear it so tests start from zero.
   G.operatorDiscard = []
-  G.contexts = [{ slots: [], closed: false }]
+  G.contexts = [{
+    slots: [],
+    closed: false,
+    ceiling: DEFAULT_CONTEXT_CEILING,
+    parentChainIx: null,
+    ownerCardId: null,
+  }]
   G.entropyStack = []
   G.entropyResolved = []
   G.entropyDeck = []
@@ -76,7 +87,21 @@ export function placeInContext(
 ): void {
   G.contexts[chainIx]!.slots.push({
     cardId,
+    faceDown: false,
+    calls: null,
     outputsRemaining: outputs,
+    relayed: false,
+    subverted: false,
+  })
+}
+
+/** Put a face-down CALL slot into the Context, invoking an installed resource. */
+export function placeCall(G: MCState, cardId: string, calls: CallTarget, chainIx = 0): void {
+  G.contexts[chainIx]!.slots.push({
+    cardId,
+    faceDown: true,
+    calls,
+    outputsRemaining: zeroPips(),
     relayed: false,
     subverted: false,
   })

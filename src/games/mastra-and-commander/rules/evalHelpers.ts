@@ -10,27 +10,59 @@
  */
 import { SHAPES } from '../constants'
 import type { Color, Contribution, Shape } from '../constants'
-import type { EvalTier, MCState } from '../types'
+import type { ContextSlot, EvalTier, MCState } from '../types'
 import type { EvalCardDef, EvalPattern } from '../cards/types'
 import { getOperatorCard } from '../cards/registry'
 
 /**
+ * What one Context slot contributes.
+ *
+ * A face-up card contributes its own printed Contribution. A face-down CALL
+ * slot contributes whatever the resource it invoked would — the installed
+ * Tool's, the attached Skill's, or RAG's payload. That indirection is the whole
+ * point of installing: the Entropy was paid once, and every later call is free
+ * (owner ruling, 2026-08-10).
+ */
+export function slotContributions(G: MCState, slot: ContextSlot): Contribution[] {
+  if (slot.subverted) return []
+
+  if (slot.calls) {
+    switch (slot.calls.kind) {
+      case 'server': {
+        const server = G.servers[slot.calls.index]
+        if (!server || server.disabled) return []
+        return getOperatorCard(server.traitCardId).contributes
+      }
+      case 'skill': {
+        const { equipmentId } = slot.calls
+        const attachment = G.skillAttachments.find((a) => a.equipmentId === equipmentId)
+        return attachment ? getOperatorCard(attachment.skillCardId).contributes : []
+      }
+      case 'rag':
+        return G.rag.contribution
+    }
+  }
+
+  return getOperatorCard(slot.cardId).contributes
+}
+
+/**
  * Everything scored against the objective:
- *  - every non-subverted Context slot's contributions, across ALL chains
- *    (a closed Process still scores — design §4: it "closes out with or
- *    without your results"),
- *  - the RAG track's locked contribution, if the track is complete,
+ *  - every non-subverted Context slot, across ALL chains including Subagent
+ *    sub-contexts (a closed Process still scores — design §4: it "closes out
+ *    with or without your results"),
  *  - junk injected by Pollute wrenches (design §5).
+ *
+ * Note RAG and installed Tools/Skills are NOT added here directly — they score
+ * only when called by a face-down slot.
  */
 export function contributionsOf(G: MCState): Contribution[] {
   const out: Contribution[] = []
   for (const chain of G.contexts) {
     for (const slot of chain.slots) {
-      if (slot.subverted) continue
-      out.push(...getOperatorCard(slot.cardId).contributes)
+      out.push(...slotContributions(G, slot))
     }
   }
-  if (G.ragLockedContribution) out.push(G.ragLockedContribution)
   out.push(...G.injectedContributions)
   return out
 }

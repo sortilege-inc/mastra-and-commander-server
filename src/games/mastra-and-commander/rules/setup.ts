@@ -6,8 +6,8 @@
  * replay verifier and saved games.
  */
 import {
-  COMMANDER_ID, DEFAULT_PROCESS_LIMIT, LOADOUT_IDS, STARTING_HAND_SIZE,
-  STARTING_MODEL_ID,
+  COMMANDER_ID, DEFAULT_CONTEXT_CEILING, DEFAULT_PROCESS_LIMIT, HAND_SIZE,
+  LOADOUT_IDS, STARTING_MODEL_ID,
 } from '../constants'
 import type { MCState } from '../types'
 import {
@@ -27,7 +27,7 @@ export function buildInitialState(random: RandomAPI): MCState {
   const featuresDeck = random.Shuffle(FEATURE_CARDS.map((f) => f.id))
 
   // Opening hand off the top of the shuffled deck.
-  const operatorHand = operatorDeck.splice(0, STARTING_HAND_SIZE)
+  const operatorHand = operatorDeck.splice(0, HAND_SIZE)
 
   const state: MCState = {
     round: 1,
@@ -36,21 +36,35 @@ export function buildInitialState(random: RandomAPI): MCState {
     phase: 'reveal',
     roundResults: [],
     matchWinner: null,
+    matchEndReason: null,
     log: ['Game begins.'],
 
     operatorDeck,
     operatorHand,
     operatorDiscard: [],
-    contexts: [{ slots: [], closed: false }],
+    contexts: [{
+      slots: [],
+      closed: false,
+      ceiling: DEFAULT_CONTEXT_CEILING,
+      parentChainIx: null,
+      ownerCardId: null,
+    }],
     processLimit: DEFAULT_PROCESS_LIMIT,
     commanderId: COMMANDER_ID,
     loadout: [...LOADOUT_IDS],
     installedModelId: STARTING_MODEL_ID,
     roundPool: zeroPips(),
     servers: [],
+    skillAttachments: [],
+    commanderFreeAgentUsed: false,
 
-    ragSteps: [],
-    ragLockedContribution: null,
+    // RAG is part of the initial setup — in play from turn one, unbuilt.
+    rag: {
+      chaptersComplete: 0,
+      upsertCardId: null,
+      contribution: [],
+      rerankUsed: false,
+    },
 
     clawPile: [],
     clawHand: [],

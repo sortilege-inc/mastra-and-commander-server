@@ -1,23 +1,44 @@
 /**
- * Play-phase moves (design §2 step 2): the Operator builds the Context, pitching
- * cards to pay costs and drawing one card per card pitched. Every play and every
- * pitch feeds the Entropy economy.
+ * Play-phase moves (design §2 step 2): the Operator builds the Context.
  *
- * All moves here are Operator-only and guard on phase + open gates. Move
- * signature is boardgame.io v0.50:
- *   ({ G, ctx, playerID, random }, ...args) => void | INVALID_MOVE
+ * The placement rules (owner rulings, 2026-08-10) are the heart of this file:
+ *
+ *  - A **Tool** can be INSTALLED as an MCP server (the Tool plus a second card
+ *    face-down as the substrate, 2 Entropy — one per card) where it gains
+ *    Durable and persists for the whole match; or played INLINE into the
+ *    Context for 1 Entropy, where it does not.
+ *  - A **Skill** can be ATTACHED to a loadout item (rig / cloud), gaining
+ *    Durable; or played INLINE, where it does not.
+ *  - Installed Tools, attached Skills, and a completed RAG track do NOT score
+ *    on their own. You reach them by playing a card FACE-DOWN into the Context
+ *    as a **CALL** — free, because the Entropy was paid at install time. The
+ *    called resource's Contribution is what lands in the Context.
+ *  - Face-down cards are SKIPPED for produce/consume: the chain looks through
+ *    them to the last face-up card.
+ *  - A **Subagent** opens its own sub-context with its own ceiling, whose cards
+ *    do not count against the parent's ceiling.
+ *  - The commander makes the first **Agent** each round free — no cost, no
+ *    Entropy.
+ *
+ * All moves here are Operator-only and guard on phase + open gates.
  */
 import { INVALID_MOVE } from 'boardgame.io/core'
 import {
-  CLAW_COMPLETE_COUNT, COMMANDER_ABILITY_PIP, INSTALLABLE_TRAITS, OPERATOR_SEAT,
-  RAG_CLEAR_COUNT, RAG_STEP_COUNT, TRAIT_EVENT, TRAIT_MODEL,
+  CALL_ENTROPY, CLAW_COMPLETE_COUNT, DEFAULT_CONTEXT_CEILING, OPERATOR_SEAT,
+  RAG_CHAPTERS, RAG_CLEAR_COUNT, RAG_RERANK_INDEX, RAG_UPSERT_INDEX,
+  SKILL_ATTACH_ENTROPY, TOOL_SERVER_ENTROPY, TRAIT_EVENT, TRAIT_MODEL,
+  TRAIT_SUBAGENT,
 } from '../constants'
-import type { MCState } from '../types'
+import type { MCState, CallTarget } from '../types'
 import { getCommander, getOperatorCard } from '../cards/registry'
-import { applyPlanToSources, chainOutputs, planPayment, toPipCounts } from './ioFlow'
+import { contributionSize } from '../cards/types'
+import {
+  applyPlanToSources, chainOutputs, lastPayingSlot, planPayment, toPipCounts,
+  zeroPips,
+} from './ioFlow'
 import {
   draw, ecosystemDiscount, executePitches, feedCostOf, feedEntropy, log,
-  removeFromHands,
+  refillHand, removeFromHands,
 } from './playHelpers'
 
 /** The subset of the boardgame.io move context these handlers use. */
@@ -36,6 +57,13 @@ function canOperatorAct(G: MCState, playerID?: string | null): boolean {
     && G.pendingFailureScrap === null
 }
 
+/** True while the Operator may add a card to this chain. */
+function chainHasRoom(G: MCState, chainIx: number): boolean {
+  const chain = G.contexts[chainIx]
+  if (!chain || chain.closed) return false
+  return chain.slots.length < chain.ceiling
+}
+
 /** Look up pitch cards, rejecting any not actually held. */
 function resolvePitches(G: MCState, pitchIds: string[]) {
   const defs = []
@@ -46,9 +74,12 @@ function resolvePitches(G: MCState, pitchIds: string[]) {
   return defs
 }
 
+const inHand = (G: MCState, cardId: string): boolean =>
+  G.operatorHand.includes(cardId) || G.clawHand.includes(cardId)
+
 /**
  * Play a card into a Context chain (design §4 "Context — the window & the I/O
- * flow"). Cost is paid first from the previous card's outputs, then the round
+ * flow"). Cost is paid from the previous face-up card's outputs, then the round
  * pool, then by pitching.
  */
 export function playToContext(
@@ -58,42 +89,136 @@ export function playToContext(
   pitchIds: string[] = [],
 ) {
   if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
+  if (!chainHasRoom(G, processIx)) return INVALID_MOVE
+  if (!inHand(G, cardId)) return INVALID_MOVE
 
-  const chain = G.contexts[processIx]
-  if (!chain || chain.closed) return INVALID_MOVE
-  if (!G.operatorHand.includes(cardId) && !G.clawHand.includes(cardId)) return INVALID_MOVE
-
+  const chain = G.contexts[processIx]!
   const def = getOperatorCard(cardId)
   // Events and Responses have their own moves/phases.
   if (def.traits.includes(TRAIT_EVENT)) return INVALID_MOVE
 
+  // Commander: the first Agent each round is free — no cost, no Entropy.
+  const commander = getCommander(G.commanderId)
+  const free = !G.commanderFreeAgentUsed
+    && def.traits.includes(commander.freeTrait)
+
   const pitchDefs = resolvePitches(G, pitchIds)
   if (!pitchDefs) return INVALID_MOVE
 
-  const lastSlot = chain.slots[chain.slots.length - 1]
-  const result = planPayment(
-    def.consume,
-    {
-      prevOutputs: chainOutputs(lastSlot?.outputsRemaining),
-      roundPool: G.roundPool,
-    },
-    pitchDefs,
-    ecosystemDiscount(G, def),
-  )
-  if (!result.ok) return INVALID_MOVE
+  // Face-down calls are skipped for produce/consume — look through them.
+  const payingSlot = lastPayingSlot(chain.slots)
 
-  applyPlanToSources(result.plan, lastSlot?.outputsRemaining ?? null, G.roundPool)
-  executePitches(G, pitchIds, `playing ${def.name}`)
+  if (free) {
+    if (pitchIds.length > 0) return INVALID_MOVE // nothing to pay for
+  } else {
+    const result = planPayment(
+      def.consume,
+      {
+        prevOutputs: chainOutputs(payingSlot?.outputsRemaining),
+        roundPool: G.roundPool,
+      },
+      pitchDefs,
+      def,
+      ecosystemDiscount(G, def),
+    )
+    if (!result.ok) return INVALID_MOVE
+
+    applyPlanToSources(result.plan, payingSlot?.outputsRemaining ?? null, G.roundPool)
+    executePitches(G, result.plan.pitches, `playing ${def.name}`)
+  }
 
   removeFromHands(G, cardId)
   chain.slots.push({
     cardId,
+    faceDown: false,
+    calls: null,
     outputsRemaining: toPipCounts(def.produce),
     relayed: false,
     subverted: false,
   })
-  log(G, `played ${def.name} into the Context`)
-  feedEntropy(G, feedCostOf(def), `played ${def.name}`)
+
+  if (free) {
+    G.commanderFreeAgentUsed = true
+    log(G, `played ${def.name} — free via ${commander.name}`)
+  } else {
+    log(G, `played ${def.name} into the Context`)
+    feedEntropy(G, feedCostOf(def), `played ${def.name}`)
+  }
+
+  // A Subagent opens its own context window; its cards don't count against
+  // this one's ceiling.
+  if (def.traits.includes(TRAIT_SUBAGENT)) {
+    G.contexts.push({
+      slots: [],
+      closed: false,
+      ceiling: chain.ceiling,
+      parentChainIx: processIx,
+      ownerCardId: cardId,
+    })
+    log(G, `${def.name} opened a sub-context (ceiling ${chain.ceiling})`)
+  }
+
+  refillHand(G, `played ${def.name}`)
+}
+
+/**
+ * Play a card FACE-DOWN into the Context to CALL an installed resource — an
+ * MCP server's Tool, a Skill on your rig/cloud, or a completed RAG track.
+ *
+ * Free of Entropy and of resources: you already paid when you installed it.
+ * The called resource's Contribution is what the Context scores.
+ */
+export function callInstalled(
+  { G, playerID }: MoveCtx,
+  processIx: number,
+  cardId: string,
+  target: CallTarget,
+) {
+  if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
+  if (!chainHasRoom(G, processIx)) return INVALID_MOVE
+  if (!inHand(G, cardId)) return INVALID_MOVE
+  if (!callTargetExists(G, target)) return INVALID_MOVE
+
+  removeFromHands(G, cardId)
+  G.contexts[processIx]!.slots.push({
+    cardId,
+    faceDown: true,
+    calls: target,
+    // Face-down cards are skipped for produce/consume.
+    outputsRemaining: zeroPips(),
+    relayed: false,
+    subverted: false,
+  })
+  log(G, `called ${describeCallTarget(G, target)} (face-down)`)
+  feedEntropy(G, CALL_ENTROPY, 'call')
+  refillHand(G, 'call')
+}
+
+/** Is this call target actually installed and usable? */
+export function callTargetExists(G: MCState, target: CallTarget): boolean {
+  switch (target.kind) {
+    case 'server': {
+      const server = G.servers[target.index]
+      return !!server && !server.disabled
+    }
+    case 'skill':
+      return G.skillAttachments.some((a) => a.equipmentId === target.equipmentId)
+    case 'rag':
+      return G.rag.chaptersComplete > RAG_UPSERT_INDEX
+  }
+}
+
+export function describeCallTarget(G: MCState, target: CallTarget): string {
+  switch (target.kind) {
+    case 'server':
+      return getOperatorCard(G.servers[target.index]!.traitCardId).name
+    case 'skill': {
+      const attachment = G.skillAttachments.find((a) => a.equipmentId === target.equipmentId)
+      return attachment ? getOperatorCard(attachment.skillCardId).name : 'a Skill'
+    }
+    case 'rag':
+      return 'RAG'
+  }
 }
 
 /** Play an Event-trait card — pays like a Context card but resolves an effect
@@ -104,7 +229,7 @@ export function playEvent(
   pitchIds: string[] = [],
 ) {
   if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
-  if (!G.operatorHand.includes(cardId) && !G.clawHand.includes(cardId)) return INVALID_MOVE
+  if (!inHand(G, cardId)) return INVALID_MOVE
 
   const def = getOperatorCard(cardId)
   if (!def.traits.includes(TRAIT_EVENT) || !def.event) return INVALID_MOVE
@@ -112,18 +237,18 @@ export function playEvent(
   const pitchDefs = resolvePitches(G, pitchIds)
   if (!pitchDefs) return INVALID_MOVE
 
-  // Events pay from the round pool and pitches only — they are not part of a
-  // chain, so there are no previous outputs to draw on.
+  // Events are not part of a chain, so there are no previous outputs.
   const result = planPayment(
     def.consume,
-    { prevOutputs: toPipCounts([]), roundPool: G.roundPool },
+    { prevOutputs: zeroPips(), roundPool: G.roundPool },
     pitchDefs,
+    def,
     ecosystemDiscount(G, def),
   )
   if (!result.ok) return INVALID_MOVE
 
   applyPlanToSources(result.plan, null, G.roundPool)
-  executePitches(G, pitchIds, `playing ${def.name}`)
+  executePitches(G, result.plan.pitches, `playing ${def.name}`)
   removeFromHands(G, cardId)
   G.operatorDiscard.push(cardId)
   log(G, `played ${def.name}`)
@@ -137,36 +262,19 @@ export function playEvent(
       draw(G, def.event.n, def.name)
       break
     case 'openProcess':
-      // Parallelism (design §4): grants an additional concurrent Process.
       G.processLimit += 1
       log(G, `Process limit is now ${G.processLimit}`)
       break
   }
 
   feedEntropy(G, feedCostOf(def), `played ${def.name}`)
+  refillHand(G, `played ${def.name}`)
 }
 
 /**
- * Commander ability (design §4: the commander "offers a ramp ability").
- * PLACEHOLDER — the printed Mastra card is pending redesign.
- */
-export function useCommanderAbility({ G, playerID }: MoveCtx, pitchCardId: string) {
-  if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
-  if (!G.operatorHand.includes(pitchCardId)) return INVALID_MOVE
-
-  const commander = getCommander(G.commanderId)
-  const pitchDef = getOperatorCard(pitchCardId)
-  if (!pitchDef.consume.includes(COMMANDER_ABILITY_PIP)) return INVALID_MOVE
-
-  executePitches(G, [pitchCardId], commander.name)
-  for (const pip of commander.abilityGrant) G.roundPool[pip] += 1
-  log(G, `${commander.name}: gained ${commander.abilityGrant.join(' ')}`)
-}
-
-/**
- * Install a server (design §4 "Installs / Servers — the attack surface"):
- * discard a card face-down as the substrate, then play an MCP / Skill / Tool
- * card onto it. BEST-GUESS(Q9): the substrate comes from the Operator's hand.
+ * Install a Tool as an MCP server: the Tool plus a second card discarded
+ * face-down as the substrate. Costs TOOL_SERVER_ENTROPY (one per card), gains
+ * Durable, and persists for the whole match.
  */
 export function installServer(
   { G, playerID }: MoveCtx,
@@ -176,60 +284,144 @@ export function installServer(
 ) {
   if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
   if (substrateCardId === traitCardId) return INVALID_MOVE
-  if (!G.operatorHand.includes(substrateCardId)) return INVALID_MOVE
-  if (!G.operatorHand.includes(traitCardId)) return INVALID_MOVE
+  if (!inHand(G, substrateCardId) || !inHand(G, traitCardId)) return INVALID_MOVE
 
   const traitDef = getOperatorCard(traitCardId)
-  const installable = traitDef.traits.some((t) =>
-    (INSTALLABLE_TRAITS as readonly string[]).includes(t))
-  if (!installable) return INVALID_MOVE
+  if (!traitDef.traits.includes('Tool') && !traitDef.traits.includes('MCP')) {
+    return INVALID_MOVE
+  }
 
   const pitchDefs = resolvePitches(G, pitchIds)
   if (!pitchDefs) return INVALID_MOVE
 
   const result = planPayment(
     traitDef.consume,
-    { prevOutputs: toPipCounts([]), roundPool: G.roundPool },
+    { prevOutputs: zeroPips(), roundPool: G.roundPool },
     pitchDefs,
+    traitDef,
     ecosystemDiscount(G, traitDef),
   )
   if (!result.ok) return INVALID_MOVE
 
   applyPlanToSources(result.plan, null, G.roundPool)
-  executePitches(G, pitchIds, `installing ${traitDef.name}`)
+  executePitches(G, result.plan.pitches, `installing ${traitDef.name}`)
 
   removeFromHands(G, substrateCardId)
   removeFromHands(G, traitCardId)
   G.servers.push({ substrateCardId, traitCardId, disabled: false })
-  log(G, `installed ${traitDef.name} on a face-down server`)
-
-  // The face-down discard is Operator activity, so it feeds (design §4).
-  feedEntropy(G, 1, 'server substrate')
-  feedEntropy(G, feedCostOf(traitDef), `installed ${traitDef.name}`)
+  log(G, `installed ${traitDef.name} as an MCP server (Durable, persists)`)
+  feedEntropy(G, TOOL_SERVER_ENTROPY, `installed ${traitDef.name}`)
+  refillHand(G, `installed ${traitDef.name}`)
 }
 
 /**
- * Build one step of the RAG track (design §4 "RAG — the anti-entropy engine").
- * Building feeds Entropy — "it's a bet". Completing all four removes some of
- * the stack at random and locks RAG to the final card's Contribution.
- *
- * BEST-GUESS(Q5): steps cost a card but no resources; completion clears
- * RAG_CLEAR_COUNT at random; the lock is the final card's first contribution.
+ * Attach a Skill to a loadout item (local rig or cloud). The Skill gains
+ * Durable and persists; call it later with a face-down card.
  */
-export function buildRagStep({ G, playerID, random }: MoveCtx, cardId: string) {
+export function attachSkill(
+  { G, playerID }: MoveCtx,
+  equipmentId: string,
+  cardId: string,
+  pitchIds: string[] = [],
+) {
   if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
-  if (!G.operatorHand.includes(cardId)) return INVALID_MOVE
-  if (G.ragSteps.length >= RAG_STEP_COUNT) return INVALID_MOVE
+  if (!inHand(G, cardId)) return INVALID_MOVE
+  if (!G.loadout.includes(equipmentId)) return INVALID_MOVE
+  // One Skill per loadout item.
+  if (G.skillAttachments.some((a) => a.equipmentId === equipmentId)) return INVALID_MOVE
 
   const def = getOperatorCard(cardId)
-  removeFromHands(G, cardId)
-  G.ragSteps.push(cardId)
-  log(G, `RAG step ${G.ragSteps.length}/${RAG_STEP_COUNT}: ${def.name}`)
-  feedEntropy(G, feedCostOf(def), 'RAG step')
+  if (!def.traits.includes('Skill')) return INVALID_MOVE
 
-  if (G.ragSteps.length === RAG_STEP_COUNT) {
-    const contribution = def.contributes[0]
-    G.ragLockedContribution = contribution ?? null
+  const pitchDefs = resolvePitches(G, pitchIds)
+  if (!pitchDefs) return INVALID_MOVE
+
+  const result = planPayment(
+    def.consume,
+    { prevOutputs: zeroPips(), roundPool: G.roundPool },
+    pitchDefs,
+    def,
+    ecosystemDiscount(G, def),
+  )
+  if (!result.ok) return INVALID_MOVE
+
+  applyPlanToSources(result.plan, null, G.roundPool)
+  executePitches(G, result.plan.pitches, `attaching ${def.name}`)
+  removeFromHands(G, cardId)
+  G.skillAttachments.push({ equipmentId, skillCardId: cardId })
+  log(G, `attached ${def.name} to ${equipmentId} (Durable, persists)`)
+  feedEntropy(G, SKILL_ATTACH_ENTROPY, `attached ${def.name}`)
+  refillHand(G, `attached ${def.name}`)
+}
+
+/**
+ * Advance the RAG saga by one chapter (owner ruling, 2026-08-10).
+ *
+ * Each chapter costs one pip of its own type (RAG_CHAPTERS). The card fed to
+ * the Upsert chapter sets RAG's payload — the Contribution a CALL to RAG
+ * supplies. Completing the required chapters clears Entropy at random.
+ *
+ * `cardId` is required at Upsert (it becomes the payload) and at Rerank (its
+ * contribution replaces the payload, and must be the same size); ignored
+ * elsewhere.
+ */
+export function advanceRag(
+  { G, playerID, random }: MoveCtx,
+  pitchIds: string[] = [],
+  cardId: string | null = null,
+) {
+  if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
+
+  const chapterIx = G.rag.chaptersComplete
+  const chapter = RAG_CHAPTERS[chapterIx]
+  if (!chapter) return INVALID_MOVE // saga already complete
+
+  const needsCard = chapterIx === RAG_UPSERT_INDEX || chapterIx === RAG_RERANK_INDEX
+  if (needsCard) {
+    if (!cardId || !inHand(G, cardId)) return INVALID_MOVE
+  }
+
+  // Rerank may only swap in a payload of EQUAL size (icon count).
+  if (chapterIx === RAG_RERANK_INDEX && cardId) {
+    const replacement = getOperatorCard(cardId).contributes
+    if (contributionSize(replacement) !== contributionSize(G.rag.contribution)) {
+      return INVALID_MOVE
+    }
+  }
+
+  const pitchDefs = resolvePitches(G, pitchIds)
+  if (!pitchDefs) return INVALID_MOVE
+
+  const result = planPayment(
+    [chapter.cost],
+    { prevOutputs: zeroPips(), roundPool: G.roundPool },
+    pitchDefs,
+    cardId ? getOperatorCard(cardId) : null,
+  )
+  if (!result.ok) return INVALID_MOVE
+
+  applyPlanToSources(result.plan, null, G.roundPool)
+  executePitches(G, result.plan.pitches, `RAG ${chapter.name}`)
+
+  if (chapterIx === RAG_UPSERT_INDEX && cardId) {
+    removeFromHands(G, cardId)
+    G.rag.upsertCardId = cardId
+    G.rag.contribution = [...getOperatorCard(cardId).contributes]
+    log(G, `RAG Upsert: payload set from ${getOperatorCard(cardId).name}`)
+  }
+
+  if (chapterIx === RAG_RERANK_INDEX && cardId) {
+    removeFromHands(G, cardId)
+    G.rag.contribution = [...getOperatorCard(cardId).contributes]
+    G.rag.rerankUsed = true
+    log(G, `RAG Rerank: payload swapped to ${getOperatorCard(cardId).name}'s contribution`)
+  }
+
+  G.rag.chaptersComplete += 1
+  log(G, `RAG ${chapter.name} complete (${G.rag.chaptersComplete}/${RAG_CHAPTERS.length})`)
+
+  // Completing the required chapters is the anti-entropy payoff.
+  if (G.rag.chaptersComplete === RAG_RERANK_INDEX) {
     let removed = 0
     for (let i = 0; i < RAG_CLEAR_COUNT && G.entropyStack.length > 0; i++) {
       const ix = random ? random.Die(G.entropyStack.length) - 1 : 0
@@ -239,19 +431,10 @@ export function buildRagStep({ G, playerID, random }: MoveCtx, cardId: string) {
         removed++
       }
     }
-    log(G, `RAG complete — removed ${removed} Entropy at random; locked to ${contribution ? `${contribution.color} ${contribution.shape}` : 'nothing'}`)
+    log(G, `RAG online — cleared ${removed} Entropy at random`)
   }
-}
 
-/** Reset the RAG track to re-spec it for a different eval (design §4). */
-export function resetRag({ G, playerID }: MoveCtx) {
-  if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
-  if (G.ragSteps.length === 0) return INVALID_MOVE
-
-  G.operatorDiscard.push(...G.ragSteps)
-  G.ragSteps = []
-  G.ragLockedContribution = null
-  log(G, 'RAG track reset')
+  refillHand(G, `RAG ${chapter.name}`)
 }
 
 /**
@@ -274,6 +457,7 @@ export function loadClaw({ G, playerID }: MoveCtx, cardId: string) {
     G.clawPile = []
     log(G, 'Claw complete — available as a second hand')
   }
+  refillHand(G, 'Claw load')
 }
 
 /** Upgrade the installed Model (design §4: "can be upgraded over the game"). */
@@ -283,7 +467,7 @@ export function upgradeModel(
   pitchIds: string[] = [],
 ) {
   if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
-  if (!G.operatorHand.includes(cardId)) return INVALID_MOVE
+  if (!inHand(G, cardId)) return INVALID_MOVE
 
   const def = getOperatorCard(cardId)
   if (!def.traits.includes(TRAIT_MODEL)) return INVALID_MOVE
@@ -293,30 +477,39 @@ export function upgradeModel(
 
   const result = planPayment(
     def.consume,
-    { prevOutputs: toPipCounts([]), roundPool: G.roundPool },
+    { prevOutputs: zeroPips(), roundPool: G.roundPool },
     pitchDefs,
+    def,
     ecosystemDiscount(G, def),
   )
   if (!result.ok) return INVALID_MOVE
 
   applyPlanToSources(result.plan, null, G.roundPool)
-  executePitches(G, pitchIds, `upgrading to ${def.name}`)
+  executePitches(G, result.plan.pitches, `upgrading to ${def.name}`)
   removeFromHands(G, cardId)
 
-  // BEST-GUESS(Q11): the Model card id doubles as the installed model's id
-  // (testSet keeps them in sync).
   G.installedModelId = 'TEST-MODEL-FRONTIER'
   log(G, `upgraded model to ${def.name}`)
   feedEntropy(G, feedCostOf(def), `upgraded to ${def.name}`)
+  refillHand(G, `upgraded to ${def.name}`)
 }
 
 /** Open an additional Process, if Parallelism has raised the limit. */
 export function openProcess({ G, playerID }: MoveCtx) {
   if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
-  if (G.contexts.length >= G.processLimit) return INVALID_MOVE
+  // Sub-contexts don't consume Process slots — only top-level chains do.
+  const topLevel = G.contexts.filter((c) => c.parentChainIx === null).length
+  if (topLevel >= G.processLimit) return INVALID_MOVE
 
-  G.contexts.push({ slots: [], closed: false })
-  log(G, `opened Process ${G.contexts.length}`)
+  const evalCeiling = G.contexts[0]?.ceiling ?? DEFAULT_CONTEXT_CEILING
+  G.contexts.push({
+    slots: [],
+    closed: false,
+    ceiling: evalCeiling,
+    parentChainIx: null,
+    ownerCardId: null,
+  })
+  log(G, `opened Process ${topLevel + 1}`)
 }
 
 /** Close a Process. BEST-GUESS(Q15): closing is voluntary; a closed Process
@@ -327,5 +520,10 @@ export function closeProcess({ G, playerID }: MoveCtx, processIx: number) {
   if (!chain || chain.closed) return INVALID_MOVE
 
   chain.closed = true
-  log(G, `closed Process ${processIx + 1}`)
+  log(G, `closed context ${processIx + 1}`)
 }
+
+// NOTE: playing a Tool or Skill INLINE (the cheap option that grants no
+// Durable) needs no move of its own — it is just `playToContext`, whose
+// Entropy price is the card's own feed (INLINE_PLACEMENT_ENTROPY by default).
+// The expensive, persistent options are `installServer` and `attachSkill`.

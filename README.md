@@ -17,7 +17,27 @@ Entropy → Response → Eval check → rollover) runs with every subsystem
 implemented: the pitch economy, the Context I/O chain, the Entropy LIFO stack
 and all three wrench vectors, Contribution/Eval scoring on the success ladder,
 relay/Durable, RAG, the Claw, servers, Features, Models, equipment, Processes,
-and ecosystem discounts. A 5-round match resolves to a winner.
+and ecosystem discounts. A **3-eval** match resolves to a winner.
+
+Key mechanics as of the 2026-08-10 rulings:
+
+- **Mastra** makes the **first Agent each round free** — no cost, no Entropy.
+- **Pitching is always legal**; its Entropy price is set by how the pitched
+  card's Contribution matches the card being paid for: **1** for colour+shape,
+  **2** for either, **3** for neither.
+- The hand is **always five cards**; the **deck** is the clock, and cycling it
+  ends the match.
+- **Tools** install as MCP servers (Tool + face-down substrate, 2 Entropy,
+  Durable, persists) or play inline for 1 without Durable. **Skills** attach to
+  the rig/cloud for Durable, or play inline without.
+- Installed Tools/Skills and a completed RAG **don't score on their own** — you
+  play a card **face-down as a call**, free, and the called resource's
+  Contribution enters the Context. Face-down cards are **skipped for I/O**.
+- **RAG is a setup saga**: Chunk/Embed/Insert/Upsert/(Rerank), 1 pip each of a
+  different type; Upsert's fed card sets the payload, Rerank swaps it for one of
+  equal size.
+- A context window holds **7 cards** (or whatever the Objective says);
+  **Subagents open their own** window that doesn't count against the parent's.
 
 ⚠ **Many rules here are BEST-GUESS placeholders.** The design doc
 ([`../mastra-and-commander/cards/game-design.md`](../mastra-and-commander/cards/game-design.md))
@@ -136,25 +156,29 @@ of them live in `constants.ts`.
 | 3 | A `lesser` pass feeds **1** extra Entropy next round | §4 |
 | 4 | On failure, the round's resolved Entropy returns to the stack (literal "persists") | §4 |
 | 5 | Relaying a non-Durable card costs **Entropy only**, no resources | ❓Q4 |
-| 6 | RAG steps cost a card but no resources; each feeds; completing clears **3** at random; locks to the final card's first contribution | ❓Q5 |
+| 6 | RAG completion clears **3** Entropy at random | ❓Q5 (rest now locked) |
 | 7 | Ecosystem discount: −1 **generic** pip when a same-ecosystem card is in play. Ecosystems: anthropic / openai / google / oss | ❓Q6 |
 | 8 | Claw completes at **3** cards; each load feeds 1; the complete pile becomes a second hand | ❓Q7 |
 | 9 | Solo: Entropy auto-feeds from the deck top and auto-targets the **leftmost eligible** target | ❓Q8 |
-| 10 | Server substrate comes from the Operator's **hand**; the face-down discard feeds 1 | ❓Q9 |
-| 11 | Installs are a flat list, no server zone / ice. A live server grants **1 generic** per round; `attackServer` destroys it | ❓Q10 |
-| 12 | Models are free-resource engines granting pips at Reveal; upgrading = playing a Model-trait card | ❓Q11 |
-| 13 | Local Rig grants ⚙, Cloud grants ◆. Auto-pitch mills **1 card per equipment**, with no draw and **no Entropy feed** (it is the free baseline economy) | ❓Q12 |
-| 14 | Match = **5 rounds**; Operator wins on **≥3 passes** (`lesser` counts as a pass) | ❓Q13 |
-| 15 | Goal-hijack is a minimal open swap with the next Eval card; the hidden true-objective layer is **deferred** | ❓Q14 |
-| 16 | Closing a Process is voluntary; a closed Process still scores | ❓Q15 |
-| 17 | Features are chosen fresh each eval; **3** offered, 1–3 picked by difficulty | 🟨 Q18 |
-| 18 | Payment matrix: a typed output pays its own type *or* a generic pip; a generic output pays only generic pips | ❓Q2 / 🟨19 |
-| 19 | Commander (placeholder): pitch a card whose cost includes ◉ → gain ⚙⚙⚙, unrestricted. **The printed Mastra card is deliberately NOT implemented** (pending redesign) | — |
-| 20 | Deck exhaustion: draws and feeds no-op with a log line; **no reshuffles** | — |
-| 21 | Contribution vocabulary: **5 colors × 5 ordered shapes** (owner-decided) | ❓Q1 |
+| 10 | Installs are a flat list, no server zone / ice. A live server grants **1 generic** per round; `attackServer` destroys it | ❓Q10 |
+| 11 | Models are free-resource engines granting pips at Reveal; upgrading = playing a Model-trait card | ❓Q11 |
+| 12 | Local Rig grants ⚙, Cloud grants ◆. Auto-pitch mills **1 card per equipment**, with no draw and **no Entropy feed** (it is the free baseline economy) | ❓Q12 |
+| 13 | Operator wins the 3-eval match on **≥2 passes** (`lesser` counts as a pass) | ❓Q13 (length now locked) |
+| 14 | Goal-hijack is a minimal open swap with the next Eval card; the hidden true-objective layer is **deferred** | ❓Q14 |
+| 15 | Closing a Process is voluntary; a closed Process still scores | ❓Q15 |
+| 16 | Features are chosen fresh each eval; **3** offered, 1–3 picked by difficulty | 🟨 Q18 |
+| 17 | Payment matrix: a typed output pays its own type *or* a generic pip; a generic output pays only generic pips | ❓Q2 / 🟨19 |
+| 18 | Deck exhaustion during a round: draws/feeds no-op with a log line, **no reshuffles**; an empty deck at round end ends the match | — |
+| 19 | RAG chapter costs (⚙ / ◉ / ◆ / ○ / ⚙) — "a different 1-cost each" was the ruling; the specific assignment is ours | — |
+| 20 | One Skill per loadout item | — |
+| 21 | A face-down CALL costs no resources either (the ruling specified zero *Entropy*) | — |
 
-Also note: the design's **stat badge** is not modeled at all — the new frame has
-no stat zone and the Eval scores contributions instead (❓Q3).
+**Locked by the 2026-08-10 rulings** (no longer guesses): contribution vocabulary
+(5×5), same-currency outputs, stat badge dropped, the 1/2/3 pitch scale, Mastra's
+free-Agent ability, the always-five hand, the 3-eval match and deck-out end
+condition, Tool/Skill install-vs-inline, face-down calls, face-down cards skipped
+for I/O, RAG as a setup saga, and the 7-card context ceiling with subagent
+sub-contexts.
 
 ## Carried over from tcggg (known stubs)
 

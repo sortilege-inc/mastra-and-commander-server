@@ -156,7 +156,7 @@ describe('Context teardown and relay', () => {
 
   it('collapses parallel Processes back to one', () => {
     const G = emptyGameState()
-    G.contexts.push({ slots: [], closed: false })
+    G.contexts.push({ slots: [], closed: false, ceiling: 7, parentChainIx: null, ownerCardId: null })
     G.processLimit = 2
     atEvalCheck(G, 'TEST-EV-PAIR-SHAPES')
     G.pendingFailureScrap = null

@@ -6,16 +6,18 @@
  * so these tests are as much a record of WHAT WE GUESSED as a regression net.
  */
 import { describe, expect, it } from 'vitest'
-import { CLAW_COMPLETE_COUNT, RAG_STEP_COUNT } from '../constants'
 import {
-  buildRagStep, closeProcess, installServer, loadClaw, openProcess, playEvent,
-  playToContext, resetRag, upgradeModel, useCommanderAbility,
+  CLAW_COMPLETE_COUNT, HAND_SIZE, RAG_CHAPTERS, RAG_RERANK_INDEX,
+  RAG_UPSERT_INDEX,
+} from '../constants'
+import {
+  advanceRag, attachSkill, callInstalled, closeProcess, installServer, loadClaw,
+  openProcess, playEvent, playToContext, upgradeModel,
 } from './playMoves'
 import { playResponse } from './responseMoves'
 import { pickFeature, skipFeaturePicks } from './revealMoves'
 import { advancePhase } from './phaseMoves'
 import { ecosystemDiscount } from './playHelpers'
-import { enterReveal } from './phaseHelpers'
 import { emptyGameState, placeInContext, seededRandom } from '../testing/fixtures'
 import { getOperatorCard } from '../cards/registry'
 import type { MCState } from '../types'
@@ -31,7 +33,8 @@ describe('playToContext', () => {
     playToContext(mv(G), 0, 'TEST-OP-SCRATCHPAD', [])
     expect(G.contexts[0]!.slots).toHaveLength(1)
     expect(G.contexts[0]!.slots[0]!.outputsRemaining.generic).toBe(1)
-    expect(G.operatorHand).toHaveLength(0)
+    // The hand refilled to HAND_SIZE rather than shrinking.
+    expect(G.operatorHand).toHaveLength(HAND_SIZE)
   })
 
   it('chains: the previous card outputs pay the next cost', () => {
@@ -52,6 +55,7 @@ describe('playToContext', () => {
     const G = emptyGameState()
     G.phase = 'play'
     G.operatorHand = ['TEST-OP-AGENT'] // costs technology, nothing available
+    G.commanderFreeAgentUsed = true    // testing the paid path
 
     const result = playToContext(mv(G), 0, 'TEST-OP-AGENT', [])
     expect(result).toBeDefined() // INVALID_MOVE
@@ -62,6 +66,7 @@ describe('playToContext', () => {
     const G = emptyGameState()
     G.phase = 'play'
     G.operatorHand = ['TEST-OP-AGENT', 'TEST-OP-SUBAGENT'] // subagent cost includes technology
+    G.commanderFreeAgentUsed = true // testing the paid path
     G.operatorDeck = ['TEST-OP-SCRATCHPAD']
     G.entropyDeck = ['TEST-EN-STATIC', 'TEST-EN-HALLUCINATION', 'TEST-EN-SLOP']
 
@@ -69,16 +74,18 @@ describe('playToContext', () => {
 
     expect(G.contexts[0]!.slots).toHaveLength(1)
     expect(G.operatorDiscard).toContain('TEST-OP-SUBAGENT')
-    // Drew 1 for the pitch (locked rule).
+    // The hand refilled from the deck.
     expect(G.operatorHand).toContain('TEST-OP-SCRATCHPAD')
-    // Fed for the pitch AND for the play.
-    expect(G.entropyStack.length).toBe(2)
+    // Subagent (cyan triangle) vs Agent (cyan circle) = colour-only = 2,
+    // plus 1 for playing the Agent itself.
+    expect(G.entropyStack.length).toBe(3)
   })
 
   it('honors a card multi-feed', () => {
     const G = emptyGameState()
     G.phase = 'play'
     G.operatorHand = ['TEST-OP-SWARM']
+    G.commanderFreeAgentUsed = true // Swarm is an Agent; test the paid path
     G.roundPool = { capital: 0, attention: 1, technology: 2, generic: 0 }
     G.entropyDeck = ['A', 'B', 'C', 'D'].map(() => 'TEST-EN-STATIC')
 
@@ -147,59 +154,135 @@ describe('events', () => {
   })
 })
 
-describe('commander ability (placeholder)', () => {
-  it('grants resources for pitching an attention-costing card', () => {
+describe('commander — Mastra', () => {
+  it('makes the first Agent each round free of cost and Entropy', () => {
     const G = emptyGameState()
     G.phase = 'play'
-    G.operatorHand = ['TEST-OP-TOOL-WEBSEARCH'] // cost [attention]
+    G.operatorHand = ['TEST-OP-AGENT'] // normally costs technology
+    G.entropyDeck = ['TEST-EN-STATIC']
 
-    useCommanderAbility(mv(G), 'TEST-OP-TOOL-WEBSEARCH')
-    expect(G.roundPool.technology).toBe(3)
-    expect(G.operatorDiscard).toContain('TEST-OP-TOOL-WEBSEARCH')
+    playToContext(mv(G), 0, 'TEST-OP-AGENT', [])
+
+    expect(G.contexts[0]!.slots).toHaveLength(1)
+    // Nothing paid, nothing fed.
+    expect(G.roundPool.technology).toBe(0)
+    expect(G.entropyStack).toHaveLength(0)
+    expect(G.commanderFreeAgentUsed).toBe(true)
   })
 
-  it('refuses a card whose cost lacks attention', () => {
+  it('charges the second Agent normally', () => {
     const G = emptyGameState()
     G.phase = 'play'
-    G.operatorHand = ['TEST-OP-AGENT'] // cost [technology]
+    G.operatorHand = ['TEST-OP-AGENT', 'TEST-OP-AGENT']
+    G.roundPool.technology = 1
+    G.entropyDeck = ['TEST-EN-STATIC', 'TEST-EN-SLOP']
 
-    expect(useCommanderAbility(mv(G), 'TEST-OP-AGENT')).toBeDefined()
+    playToContext(mv(G), 0, 'TEST-OP-AGENT', []) // free
+    playToContext(mv(G), 0, 'TEST-OP-AGENT', []) // paid
+
+    expect(G.contexts[0]!.slots).toHaveLength(2)
     expect(G.roundPool.technology).toBe(0)
+    expect(G.entropyStack).toHaveLength(1)
+  })
+
+  it('does not apply to non-Agent cards', () => {
+    const G = emptyGameState()
+    G.phase = 'play'
+    G.operatorHand = ['TEST-OP-MCP-FILESYSTEM'] // costs technology, not an Agent
+
+    const result = playToContext(mv(G), 0, 'TEST-OP-MCP-FILESYSTEM', [])
+    expect(result).toBeDefined() // unpayable → INVALID_MOVE
+    expect(G.commanderFreeAgentUsed).toBe(false)
   })
 })
 
-describe('RAG track', () => {
-  it('completing four steps clears Entropy and locks a contribution', () => {
+describe('RAG — the setup saga', () => {
+  /** Pay a chapter from the round pool by granting exactly its cost. */
+  const payChapter = (G: MCState, ix: number) => {
+    const chapter = RAG_CHAPTERS[ix]!
+    G.roundPool[chapter.cost] += 1
+  }
+
+  it('advances one chapter at a time, each wanting its own resource', () => {
     const G = emptyGameState()
     G.phase = 'play'
-    G.operatorHand = [
-      'TEST-OP-WORKFLOW-A', 'TEST-OP-WORKFLOW-B',
-      'TEST-OP-WORKFLOW-C', 'TEST-OP-AGENT',
-    ]
-    G.entropyStack = Array(6).fill('TEST-EN-STATIC')
-    // Building the track is "a bet" — each step feeds, so the deck must have
-    // cards to feed from.
-    G.entropyDeck = Array(4).fill('TEST-EN-STATIC')
 
-    for (const id of [...G.operatorHand]) buildRagStep(mv(G), id)
+    // The wrong resource will not do.
+    G.roundPool.capital = 5
+    expect(advanceRag(mv(G))).toBeDefined() // Chunk wants technology
 
-    expect(G.ragSteps).toHaveLength(RAG_STEP_COUNT)
-    // Locked to the final card's contribution (Agent → cyan circle).
-    expect(G.ragLockedContribution).toEqual({ color: 'cyan', shape: 'circle' })
-    // Built 4 steps (feeding 4) then cleared 3 at completion.
-    expect(G.entropyStack.length).toBe(6 + 4 - 3)
+    payChapter(G, 0)
+    advanceRag(mv(G))
+    expect(G.rag.chaptersComplete).toBe(1)
   })
 
-  it('reset clears the track so it can be re-spec\'d', () => {
+  it('takes its payload from the card fed to Upsert', () => {
     const G = emptyGameState()
     G.phase = 'play'
-    G.operatorHand = ['TEST-OP-WORKFLOW-A']
-    buildRagStep(mv(G), 'TEST-OP-WORKFLOW-A')
+    for (let ix = 0; ix < RAG_UPSERT_INDEX; ix++) {
+      payChapter(G, ix)
+      advanceRag(mv(G))
+    }
+    expect(G.rag.chaptersComplete).toBe(RAG_UPSERT_INDEX)
 
-    resetRag(mv(G))
-    expect(G.ragSteps).toHaveLength(0)
-    expect(G.ragLockedContribution).toBeNull()
-    expect(G.operatorDiscard).toContain('TEST-OP-WORKFLOW-A')
+    G.operatorHand = ['TEST-OP-AGENT'] // cyan circle
+    payChapter(G, RAG_UPSERT_INDEX)
+    advanceRag(mv(G), [], 'TEST-OP-AGENT')
+
+    expect(G.rag.upsertCardId).toBe('TEST-OP-AGENT')
+    expect(G.rag.contribution).toEqual([{ color: 'cyan', shape: 'circle' }])
+  })
+
+  it('clears Entropy at random once the required chapters are done', () => {
+    const G = emptyGameState()
+    G.phase = 'play'
+    G.entropyStack = Array(6).fill('TEST-EN-STATIC')
+    for (let ix = 0; ix < RAG_UPSERT_INDEX; ix++) {
+      payChapter(G, ix)
+      advanceRag(mv(G))
+    }
+    G.operatorHand = ['TEST-OP-AGENT']
+    payChapter(G, RAG_UPSERT_INDEX)
+    advanceRag(mv(G), [], 'TEST-OP-AGENT')
+
+    expect(G.entropyStack).toHaveLength(3) // 6 − RAG_CLEAR_COUNT
+  })
+
+  it('Rerank swaps the payload only for one of equal size', () => {
+    const G = emptyGameState()
+    G.phase = 'play'
+    for (let ix = 0; ix < RAG_UPSERT_INDEX; ix++) {
+      payChapter(G, ix)
+      advanceRag(mv(G))
+    }
+    G.operatorHand = ['TEST-OP-AGENT'] // 1 icon
+    payChapter(G, RAG_UPSERT_INDEX)
+    advanceRag(mv(G), [], 'TEST-OP-AGENT')
+
+    // Supervisor carries 2 icons — the wrong size.
+    G.operatorHand = ['TEST-OP-SUPERVISOR']
+    payChapter(G, RAG_RERANK_INDEX)
+    expect(advanceRag(mv(G), [], 'TEST-OP-SUPERVISOR')).toBeDefined()
+
+    // Workflow-A carries 1 — an even trade.
+    G.operatorHand = ['TEST-OP-WORKFLOW-A'] // amber circle
+    advanceRag(mv(G), [], 'TEST-OP-WORKFLOW-A')
+    expect(G.rag.contribution).toEqual([{ color: 'amber', shape: 'circle' }])
+    expect(G.rag.rerankUsed).toBe(true)
+  })
+
+  it('is callable only once Upsert is done', () => {
+    const G = emptyGameState()
+    G.phase = 'play'
+    G.operatorHand = ['TEST-OP-SCRATCHPAD']
+
+    // Nothing to call yet.
+    expect(callInstalled(mv(G), 0, 'TEST-OP-SCRATCHPAD', { kind: 'rag' })).toBeDefined()
+
+    G.rag.chaptersComplete = RAG_UPSERT_INDEX + 1
+    G.rag.contribution = [{ color: 'cyan', shape: 'circle' }]
+    callInstalled(mv(G), 0, 'TEST-OP-SCRATCHPAD', { kind: 'rag' })
+    expect(G.contexts[0]!.slots[0]!.faceDown).toBe(true)
   })
 })
 
@@ -226,37 +309,119 @@ describe('Claw', () => {
   })
 })
 
-describe('servers', () => {
-  it('installs a trait card onto a face-down substrate', () => {
+describe('Tool and Skill placement', () => {
+  it('installs a Tool as an MCP server over a face-down substrate', () => {
     const G = emptyGameState()
     G.phase = 'play'
     G.operatorHand = ['TEST-OP-SCRATCHPAD', 'TEST-OP-MCP-FILESYSTEM']
     G.roundPool.technology = 1
+    G.entropyDeck = Array(4).fill('TEST-EN-STATIC')
 
     installServer(mv(G), 'TEST-OP-SCRATCHPAD', 'TEST-OP-MCP-FILESYSTEM', [])
+
     expect(G.servers).toHaveLength(1)
     expect(G.servers[0]!.substrateCardId).toBe('TEST-OP-SCRATCHPAD')
+    // Two Entropy — one per card.
+    expect(G.entropyStack).toHaveLength(2)
   })
 
-  it('refuses a non-installable trait card', () => {
+  it('plays a Tool inline for 1 Entropy instead, gaining no Durable', () => {
+    const G = emptyGameState()
+    G.phase = 'play'
+    G.operatorHand = ['TEST-OP-MCP-FILESYSTEM']
+    G.roundPool.technology = 1
+    G.entropyDeck = Array(4).fill('TEST-EN-STATIC')
+
+    playToContext(mv(G), 0, 'TEST-OP-MCP-FILESYSTEM', [])
+
+    expect(G.contexts[0]!.slots).toHaveLength(1)
+    expect(G.servers).toHaveLength(0)
+    expect(G.entropyStack).toHaveLength(1)
+  })
+
+  it('attaches a Skill to a loadout item', () => {
+    const G = emptyGameState()
+    G.phase = 'play'
+    G.operatorHand = ['TEST-OP-SKILL-SUMMARIZE']
+    G.roundPool.generic = 1
+
+    attachSkill(mv(G), 'TEST-EQ-LOCAL-RIG', 'TEST-OP-SKILL-SUMMARIZE', [])
+    expect(G.skillAttachments).toEqual([{
+      equipmentId: 'TEST-EQ-LOCAL-RIG',
+      skillCardId: 'TEST-OP-SKILL-SUMMARIZE',
+    }])
+  })
+
+  it('allows only one Skill per loadout item', () => {
+    const G = emptyGameState()
+    G.phase = 'play'
+    G.skillAttachments = [{
+      equipmentId: 'TEST-EQ-LOCAL-RIG',
+      skillCardId: 'TEST-OP-SKILL-SUMMARIZE',
+    }]
+    G.operatorHand = ['TEST-OP-SKILL-SUMMARIZE']
+    G.roundPool.generic = 1
+
+    expect(attachSkill(mv(G), 'TEST-EQ-LOCAL-RIG', 'TEST-OP-SKILL-SUMMARIZE', []))
+      .toBeDefined()
+  })
+
+  it('refuses to install a non-Tool', () => {
     const G = emptyGameState()
     G.phase = 'play'
     G.operatorHand = ['TEST-OP-SCRATCHPAD', 'TEST-OP-AGENT']
     G.roundPool.technology = 1
 
-    expect(installServer(mv(G), 'TEST-OP-SCRATCHPAD', 'TEST-OP-AGENT', [])).toBeDefined()
+    expect(installServer(mv(G), 'TEST-OP-SCRATCHPAD', 'TEST-OP-AGENT', []))
+      .toBeDefined()
   })
 
-  it('grants resources at the next Reveal', () => {
+  it('calls an installed resource face-down for free', () => {
     const G = emptyGameState()
+    G.phase = 'play'
     G.servers = [{
       substrateCardId: 'TEST-OP-SCRATCHPAD',
       traitCardId: 'TEST-OP-MCP-FILESYSTEM',
       disabled: false,
     }]
-    G.roundPool = { capital: 0, attention: 0, technology: 0, generic: 0 }
-    enterReveal(G)
-    expect(G.roundPool.generic).toBeGreaterThanOrEqual(1)
+    G.operatorHand = ['TEST-OP-AGENT']
+    G.entropyDeck = Array(3).fill('TEST-EN-STATIC')
+
+    callInstalled(mv(G), 0, 'TEST-OP-AGENT', { kind: 'server', index: 0 })
+
+    const slot = G.contexts[0]!.slots[0]!
+    expect(slot.faceDown).toBe(true)
+    expect(slot.calls).toEqual({ kind: 'server', index: 0 })
+    // Free: the Entropy was paid at install time.
+    expect(G.entropyStack).toHaveLength(0)
+  })
+
+  it('refuses to call something that is not installed', () => {
+    const G = emptyGameState()
+    G.phase = 'play'
+    G.operatorHand = ['TEST-OP-AGENT']
+    expect(callInstalled(mv(G), 0, 'TEST-OP-AGENT', { kind: 'server', index: 0 }))
+      .toBeDefined()
+  })
+
+  it('skips face-down slots for produce/consume', () => {
+    const G = emptyGameState()
+    G.phase = 'play'
+    G.servers = [{
+      substrateCardId: 'TEST-OP-SCRATCHPAD',
+      traitCardId: 'TEST-OP-MCP-FILESYSTEM',
+      disabled: false,
+    }]
+    // Scratchpad produces a generic; then a face-down call; then a card whose
+    // cost the Scratchpad's output should still be able to pay.
+    G.operatorHand = ['TEST-OP-SCRATCHPAD', 'TEST-OP-AGENT', 'TEST-OP-WORKFLOW-A']
+    playToContext(mv(G), 0, 'TEST-OP-SCRATCHPAD', [])
+    callInstalled(mv(G), 0, 'TEST-OP-AGENT', { kind: 'server', index: 0 })
+    playToContext(mv(G), 0, 'TEST-OP-WORKFLOW-A', [])
+
+    expect(G.contexts[0]!.slots).toHaveLength(3)
+    // The chain looked through the face-down card to spend the Scratchpad's output.
+    expect(G.contexts[0]!.slots[0]!.outputsRemaining.generic).toBe(0)
   })
 })
 

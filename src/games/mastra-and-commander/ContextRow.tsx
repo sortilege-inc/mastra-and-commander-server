@@ -8,6 +8,8 @@ import * as React from 'react'
 import type { MCState } from './types'
 import type { PipCounts } from './constants'
 import { getOperatorCard } from './cards/registry'
+import { slotContributions } from './rules/evalHelpers'
+import { describeCallTarget } from './rules/playMoves'
 import { C, COLOR_SWATCH, PIP_GLYPH, SHAPE_GLYPH, btn } from './theme'
 
 function Pips({ counts }: { counts: PipCounts }): React.ReactElement | null {
@@ -53,6 +55,41 @@ export function ContextRow({
 
             {chain.slots.map((slot, slotIx) => {
               const def = getOperatorCard(slot.cardId)
+
+              // A face-down CALL shows the resource it invoked, NOT the card
+              // spent to make the call — that card is face-down and its printed
+              // face is irrelevant (it is also what actually scores).
+              if (slot.faceDown && slot.calls) {
+                const contributions = slotContributions(G, slot)
+                return (
+                  <div key={slotIx} style={{
+                    width: 132, padding: 8, borderRadius: 6,
+                    border: `1px dashed ${C.warn}`,
+                    background: slot.subverted ? C.dangerBg : '#201c10',
+                    opacity: slot.subverted ? 0.75 : 1,
+                  }}>
+                    <div style={{ fontSize: '0.72rem', color: C.warn, marginBottom: 4 }}>
+                      ▾ face-down call
+                    </div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 4 }}>
+                      {describeCallTarget(G, slot.calls)}
+                    </div>
+                    <div>
+                      {slot.subverted ? (
+                        <span style={{ color: C.danger, fontSize: '0.72rem' }}>SUBVERTED</span>
+                      ) : contributions.map((contrib, i) => (
+                        <span key={i} style={{ color: COLOR_SWATCH[contrib.color], marginRight: 3 }}>
+                          {SHAPE_GLYPH[contrib.shape]}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: C.dim, marginTop: 4 }}>
+                      skipped for I/O
+                    </div>
+                  </div>
+                )
+              }
+
               return (
                 <div
                   key={slotIx}

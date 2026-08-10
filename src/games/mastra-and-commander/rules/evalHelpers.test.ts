@@ -7,7 +7,7 @@ import type { EvalCardDef } from '../cards/types'
 import {
   contextSize, contributionsOf, isPass, matchEval, matchPattern, scoreTier,
 } from './evalHelpers'
-import { emptyGameState, placeInContext } from '../testing/fixtures'
+import { emptyGameState, placeCall, placeInContext } from '../testing/fixtures'
 
 const c = (color: Color, shape: Shape): Contribution => ({ color, shape })
 
@@ -109,7 +109,7 @@ describe('contributionsOf', () => {
   it('collects contributions from every chain', () => {
     const G = emptyGameState()
     placeInContext(G, 'TEST-OP-AGENT')       // cyan circle
-    G.contexts.push({ slots: [], closed: false })
+    G.contexts.push({ slots: [], closed: false, ceiling: 7, parentChainIx: null, ownerCardId: null })
     placeInContext(G, 'TEST-OP-SCRATCHPAD', undefined, 1) // pink triangle
 
     const contribs = contributionsOf(G)
@@ -126,11 +126,43 @@ describe('contributionsOf', () => {
     expect(contextSize(G)).toBe(1)
   })
 
-  it('includes injected pollution and the RAG lock', () => {
+  it('includes injected pollution', () => {
     const G = emptyGameState()
     G.injectedContributions = [c('pink', 'hexagon')]
-    G.ragLockedContribution = c('green', 'circle')
-    expect(contributionsOf(G)).toHaveLength(2)
+    expect(contributionsOf(G)).toHaveLength(1)
+  })
+
+  it('does NOT score RAG until a face-down call invokes it', () => {
+    const G = emptyGameState()
+    G.rag.chaptersComplete = 4
+    G.rag.contribution = [c('green', 'circle')]
+    // Installed, but nothing in the Context reaches for it.
+    expect(contributionsOf(G)).toHaveLength(0)
+
+    placeCall(G, 'TEST-OP-SCRATCHPAD', { kind: 'rag' })
+    expect(contributionsOf(G)).toEqual([c('green', 'circle')])
+  })
+
+  it('scores a called server as the installed Tool, not the face-down card', () => {
+    const G = emptyGameState()
+    G.servers = [{
+      substrateCardId: 'TEST-OP-SCRATCHPAD',
+      traitCardId: 'TEST-OP-TOOL-WEBSEARCH', // amber circle
+      disabled: false,
+    }]
+    // The face-down card is a Durable Agent (green pentagon) — irrelevant.
+    placeCall(G, 'TEST-OP-DURABLE-AGENT', { kind: 'server', index: 0 })
+    expect(contributionsOf(G)).toEqual([c('amber', 'circle')])
+  })
+
+  it('scores a called Skill from its loadout attachment', () => {
+    const G = emptyGameState()
+    G.skillAttachments = [{
+      equipmentId: 'TEST-EQ-LOCAL-RIG',
+      skillCardId: 'TEST-OP-SKILL-SUMMARIZE', // amber triangle
+    }]
+    placeCall(G, 'TEST-OP-SCRATCHPAD', { kind: 'skill', equipmentId: 'TEST-EQ-LOCAL-RIG' })
+    expect(contributionsOf(G)).toEqual([c('amber', 'triangle')])
   })
 
   it('scores a closed Process (it closes out with or without results)', () => {

@@ -78,7 +78,7 @@ describe('setup through the Client', () => {
     expect(G.phase).toBe('reveal')
     expect(G.currentEvalId).not.toBeNull()
     expect(G.operatorHand.length).toBeGreaterThan(0)
-    expect(G.commanderId).toBe('TEST-COMMANDER')
+    expect(G.commanderId).toBe('MASTRA')
     // The Reveal engine ran: equipment granted resources.
     const pool = G.roundPool
     expect(pool.capital + pool.attention + pool.technology + pool.generic)

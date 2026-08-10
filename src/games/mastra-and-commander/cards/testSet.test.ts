@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ENTROPY_CARDS, ENTROPY_DECK_LIST, EQUIPMENT, EVAL_CARDS, FEATURE_CARDS,
-  MODELS, OPERATOR_CARDS, OPERATOR_DECK_LIST, TEST_COMMANDER, expandDeckList,
+  MASTRA_COMMANDER, MODELS, OPERATOR_CARDS, OPERATOR_DECK_LIST, expandDeckList,
 } from './testSet'
 import {
   ALL_CARD_IDS, getEntropyCard, getEvalCard, getOperatorCard,
@@ -25,6 +25,8 @@ describe('registry integrity', () => {
     // The real roster is the owner's card-design pass; nothing here should ever
     // be mistaken for it.
     for (const id of ALL_CARD_IDS()) {
+      // Mastra is the one real, named card — its ability is owner-specified.
+      if (id === 'MASTRA') continue
       expect(id.startsWith('TEST-')).toBe(true)
     }
   })
@@ -93,9 +95,9 @@ describe('constants point at real cards', () => {
     expect(MODELS.some((m) => m.id === STARTING_MODEL_ID)).toBe(true)
   })
 
-  it('the commander is the placeholder, not the printed card', () => {
-    expect(TEST_COMMANDER.id).toBe('TEST-COMMANDER')
-    expect(TEST_COMMANDER.name).toContain('placeholder')
+  it('the commander is Mastra, granting a free Agent each round', () => {
+    expect(MASTRA_COMMANDER.id).toBe('MASTRA')
+    expect(MASTRA_COMMANDER.freeTrait).toBe('Agent')
   })
 })
 

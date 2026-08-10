@@ -28,8 +28,8 @@ import { playerView } from './playerView'
 import { advancePhase } from './rules/phaseMoves'
 import { pickFeature, skipFeaturePicks } from './rules/revealMoves'
 import {
-  buildRagStep, closeProcess, installServer, loadClaw, openProcess, playEvent,
-  playToContext, resetRag, upgradeModel, useCommanderAbility,
+  advanceRag, attachSkill, callInstalled, closeProcess, installServer, loadClaw,
+  openProcess, playEvent, playToContext, upgradeModel,
 } from './rules/playMoves'
 import {
   autoResolveEntropyTarget, chooseEntropyTarget, resolveNextEntropy,
@@ -73,11 +73,15 @@ export const MastraCommander: Game<MCState> = {
 
     // ── Phase 2 · Play — see rules/playMoves.ts ────────────────────────
     playToContext,
+    /** Face-down play that invokes an installed Tool / Skill / RAG. */
+    callInstalled,
     playEvent,
-    useCommanderAbility,
+    /** Tool + face-down substrate → a persistent, Durable MCP server. */
     installServer,
-    buildRagStep,
-    resetRag,
+    /** Skill → rig or cloud, gaining Durable. */
+    attachSkill,
+    /** Advance the RAG saga one chapter. */
+    advanceRag,
     loadClaw,
     upgradeModel,
     openProcess,

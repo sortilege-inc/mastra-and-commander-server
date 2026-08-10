@@ -8,14 +8,15 @@
  * decisions live; each is tagged with the open question it resolves.
  */
 import {
-  DEFAULT_PROCESS_LIMIT, FEATURE_OFFER_SIZE, FEATURE_PICKS_BY_DIFFICULTY,
-  LESSER_ENTROPY_PENALTY, MATCH_ROUNDS, MATCH_WIN_PASSES, SERVER_GRANT,
+  DEFAULT_CONTEXT_CEILING, DEFAULT_PROCESS_LIMIT, FEATURE_OFFER_SIZE,
+  FEATURE_PICKS_BY_DIFFICULTY, LESSER_ENTROPY_PENALTY, MATCH_ROUNDS,
+  MATCH_WIN_PASSES, SERVER_GRANT,
 } from '../constants'
 import type { Pip } from '../constants'
 import type { EvalTier, MCState } from '../types'
 import { getEquipment, getEvalCard, getModel, getOperatorCard } from '../cards/registry'
 import { contextSize, contributionsOf, isPass, scoreTier } from './evalHelpers'
-import { feedEntropy, log } from './playHelpers'
+import { feedEntropy, log, refillHand } from './playHelpers'
 import { zeroPips } from './ioFlow'
 
 /** Add pips to the round pool. */
@@ -38,12 +39,19 @@ export function enterReveal(G: MCState): void {
   const next = G.evalDeck.shift()
   if (next === undefined) {
     log(G, 'Eval deck exhausted — the match ends here.')
-    endMatch(G)
+    endMatch(G, 'rounds')
     return
   }
   G.currentEvalId = next
   const evalDef = getEvalCard(next)
   log(G, `objective revealed: ${evalDef.name} (par ${evalDef.par}, difficulty ${evalDef.difficulty})`)
+
+  // The Objective may tighten (or loosen) the context ceiling.
+  const ceiling = evalDef.contextCeiling ?? DEFAULT_CONTEXT_CEILING
+  for (const chain of G.contexts) chain.ceiling = ceiling
+  if (ceiling !== DEFAULT_CONTEXT_CEILING) {
+    log(G, `context ceiling for this eval: ${ceiling}`)
+  }
 
   // 2. Equipment auto-pitch (design §4: equipment "auto-pitches cards off the
   //    top of your deck ... and grants free resources of its types").
@@ -148,11 +156,28 @@ export function scrappableCards(G: MCState): Array<{ cardId: string; removes: nu
   return out
 }
 
-/** Decide the match winner once the rounds run out (BEST-GUESS(Q13)). */
-export function endMatch(G: MCState): void {
+/**
+ * Decide the match winner. Two ways to get here (owner ruling, 2026-08-10):
+ * the three evals run out, or the Operator cycles through their deck.
+ */
+export function endMatch(G: MCState, reason: 'rounds' | 'deckOut'): void {
   const passes = G.roundResults.filter((r) => isPass(r.tier)).length
   G.matchWinner = passes >= MATCH_WIN_PASSES ? 'operator' : 'entropy'
-  log(G, `match over — Operator passed ${passes}/${G.roundResults.length}; winner: ${G.matchWinner}`)
+  G.matchEndReason = reason
+  log(G, reason === 'deckOut'
+    ? `deck exhausted — match over. Operator passed ${passes}/${G.roundResults.length}; winner: ${G.matchWinner}`
+    : `match over — Operator passed ${passes}/${G.roundResults.length}; winner: ${G.matchWinner}`)
+}
+
+/**
+ * The Operator has cycled their deck — one of the two end conditions.
+ * Checked after any refill, since the refill is what drains it.
+ */
+export function checkDeckOut(G: MCState): boolean {
+  if (G.matchWinner) return true
+  if (G.operatorDeck.length > 0) return false
+  endMatch(G, 'deckOut')
+  return true
 }
 
 /**
@@ -183,9 +208,18 @@ export function roundRollover(G: MCState): void {
 
   // 3. Context teardown. Stateless by default: the window closes and cards
   //    discard. Relay carries a card forward, feeding Entropy unless Durable.
+  //    Installed servers, attached Skills, and RAG are NOT torn down — they
+  //    persist for the whole match, which is what you bought with the extra
+  //    Entropy at install time.
   const survivors: string[] = []
   for (const chain of G.contexts) {
     for (const slot of chain.slots) {
+      // A face-down CALL is spent when the window closes; the resource it
+      // called stays installed.
+      if (slot.faceDown) {
+        G.operatorDiscard.push(slot.cardId)
+        continue
+      }
       const def = getOperatorCard(slot.cardId)
       const durable = (def.keywords ?? []).includes('durable')
       if (slot.relayed) {
@@ -203,16 +237,23 @@ export function roundRollover(G: MCState): void {
     }
   }
 
+  const ceiling = nextCeiling(G)
   G.contexts = [{
     slots: survivors.map((cardId) => ({
       cardId,
+      faceDown: false,
+      calls: null,
       outputsRemaining: zeroPips(),
       relayed: false,
       subverted: false,
     })),
     closed: false,
+    ceiling,
+    parentChainIx: null,
+    ownerCardId: null,
   }]
   G.processLimit = DEFAULT_PROCESS_LIMIT
+  G.commanderFreeAgentUsed = false
 
   // 4. Round-scoped state clears.
   G.injectedContributions = []
@@ -226,11 +267,26 @@ export function roundRollover(G: MCState): void {
   G.activeFeatureIds = []
   G.featureOffer = []
 
-  // 6. Advance, or end the match.
+  // 6. Top the hand back up, then advance or end the match.
+  refillHand(G, 'new round')
   if (G.round >= MATCH_ROUNDS) {
-    endMatch(G)
+    endMatch(G, 'rounds')
     return
   }
+  if (checkDeckOut(G)) return
   G.round += 1
   enterReveal(G)
+}
+
+/** The context ceiling the next round should use — the current objective's, or
+ *  the default when there isn't one. */
+function nextCeiling(G: MCState): number {
+  const next = G.evalDeck[0]
+  if (!next) return DEFAULT_CONTEXT_CEILING
+  try {
+    return getEvalCard(next).contextCeiling ?? DEFAULT_CONTEXT_CEILING
+  } catch {
+    // Redacted (HIDDEN) eval ids reach here on the client's optimistic copy.
+    return DEFAULT_CONTEXT_CEILING
+  }
 }

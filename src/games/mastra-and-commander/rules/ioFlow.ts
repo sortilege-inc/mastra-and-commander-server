@@ -11,11 +11,16 @@
  * open question 🟨19). When it changes, this file and its test change; the
  * moves, the board, and the state shape should not have to.
  *
- * The locked rules it implements (design §4 "Resources & the pitch economy"):
+ * The rules it implements (design §4 "Resources & the pitch economy"):
  *  - A card's cost is paid FIRST by the previous card's output currencies.
- *  - Any shortfall is covered by pitching cards — ONE matching card per unmet
- *    pip, where the pitched card's own cost must share that type.
- *  - You draw one card for every card pitched. (Caller's job — see executePitches.)
+ *  - Any shortfall is covered by pitching cards — ONE card per unmet pip.
+ *  - The hand is refilled afterwards. (Caller's job — see executePitches.)
+ *
+ * Owner ruling (2026-08-10): ANY card may be pitched for ANY pip — the pitched
+ * card's cost no longer has to share a type. What a pitch costs is Entropy, and
+ * that price is set by how closely the pitched card's CONTRIBUTION matches the
+ * contribution of the card being paid for (see pitchEntropyFor). So this module
+ * no longer rejects a pitch on type grounds; it only checks the count.
  *
  * BEST-GUESS(Q2 / 🟨19) — the payment matrix, which the doc does not specify:
  *  - A typed output unit pays a cost pip of the SAME type, or a `generic` pip.
@@ -26,7 +31,7 @@
  * Everything here is PURE: no G, no mutation of inputs, no randomness.
  */
 import type { Currency, Pip, PipCounts } from '../constants'
-import { EMPTY_PIPS } from '../constants'
+import { EMPTY_PIPS, PITCH_ENTROPY } from '../constants'
 import type { OperatorCardDef } from '../cards/types'
 
 /** Pools a payment may draw on, in priority order (outputs before pool). */
@@ -37,13 +42,22 @@ export interface PaymentSources {
   roundPool: PipCounts
 }
 
+/** One pitched card and what it cost in Entropy. */
+export interface PitchAssignment {
+  cardId: string
+  /** Entropy this pitch feeds — set by contribution match (PITCH_ENTROPY). */
+  entropy: number
+  /** How the match was classified, for the log and the UI. */
+  match: 'exact' | 'partial' | 'none'
+}
+
 /** How many units each source contributed, so the caller can decrement exactly
  *  what was spent without re-deriving the algorithm. */
 export interface PaymentPlan {
   fromPrevOutputs: PipCounts
   fromRoundPool: PipCounts
-  /** Pitched card ids, in the order they were assigned to unmet pips. */
-  pitches: string[]
+  /** Pitched cards, in the order they were assigned to unmet pips. */
+  pitches: PitchAssignment[]
   /** Generic pips waived by the ecosystem discount. */
   discounted: number
 }
@@ -64,28 +78,24 @@ export function toPipCounts(pips: Pip[]): PipCounts {
 export const totalPips = (counts: PipCounts): number =>
   counts.capital + counts.attention + counts.technology + counts.generic
 
-/** True if a card can be pitched to cover a pip of this type. Locked rule:
- *  "each pitched card's own cost must share that type". Generic pips accept
- *  any card. */
-export function canPitchFor(def: OperatorCardDef, pip: Pip): boolean {
-  if (pip === 'generic') return true
-  return def.consume.includes(pip)
-}
-
 /**
  * Plan how to pay `cost`, drawing on `sources` and pitching `pitchDefs`.
  *
  * Returns a plan, or a reason it cannot be paid. Does NOT mutate anything —
  * the caller applies the plan (see applyPlanToSources) and handles the
- * draw-per-pitch and entropy-feed side effects.
+ * hand refill and Entropy feed.
  *
- * @param discount generic pips waived (ecosystem discount); clamped to the
- *                 number of generic pips actually in the cost.
+ * @param payingFor the card being paid for — its Contribution sets what each
+ *                  pitch costs in Entropy. Null when there is no card to
+ *                  compare against (every pitch then falls to the `none` tier).
+ * @param discount  generic pips waived (ecosystem discount); clamped to the
+ *                  number of generic pips actually in the cost.
  */
 export function planPayment(
   cost: Pip[],
   sources: PaymentSources,
   pitchDefs: OperatorCardDef[],
+  payingFor: OperatorCardDef | null = null,
   discount = 0,
 ): PaymentResult {
   const remaining = toPipCounts(cost)
@@ -144,23 +154,53 @@ export function planPayment(
     }
   }
 
-  // Assign pitches to pips. Typed pips are the constrained ones, so satisfy
-  // them first; generic pips accept anything left over. With ≤5 pips and a
-  // strict "typed first" ordering this greedy assignment is exact.
-  const available = pitchDefs.map((def, ix) => ({ def, ix, used: false }))
-  const pitches: string[] = []
-  const typedFirst = [...unmet].sort((a, b) => (a === 'generic' ? 1 : 0) - (b === 'generic' ? 1 : 0))
+  // Every pitch is legal; price each one by contribution match.
+  return {
+    ok: true,
+    plan: {
+      fromPrevOutputs,
+      fromRoundPool,
+      pitches: pitchDefs.map((def) => pitchEntropyFor(def, payingFor)),
+      discounted,
+    },
+  }
+}
 
-  for (const pip of typedFirst) {
-    const match = available.find((entry) => !entry.used && canPitchFor(entry.def, pip))
-    if (!match) {
-      return { ok: false, reason: `No pitched card can pay a ${pip} pip` }
+/**
+ * Price one pitch by how well its Contribution matches the card being paid for
+ * (owner ruling, 2026-08-10):
+ *
+ *   same color AND shape → 1 Entropy
+ *   same color OR shape  → 2
+ *   neither              → 3
+ *
+ * Cards can carry up to three contributions, so we take the BEST (cheapest)
+ * match across every pitched × target pair — you get credit for your closest
+ * resemblance, not your average one.
+ *
+ * A card with no contributions at all, or a pitch made with no target to
+ * compare against, falls to the `none` tier.
+ */
+export function pitchEntropyFor(
+  pitched: OperatorCardDef,
+  payingFor: OperatorCardDef | null,
+): PitchAssignment {
+  let best: 'exact' | 'partial' | 'none' = 'none'
+
+  for (const mine of pitched.contributes) {
+    for (const theirs of payingFor?.contributes ?? []) {
+      const sameColor = mine.color === theirs.color
+      const sameShape = mine.shape === theirs.shape
+      if (sameColor && sameShape) {
+        best = 'exact'
+        break
+      }
+      if (sameColor || sameShape) best = 'partial'
     }
-    match.used = true
-    pitches.push(match.def.id)
+    if (best === 'exact') break
   }
 
-  return { ok: true, plan: { fromPrevOutputs, fromRoundPool, pitches, discounted } }
+  return { cardId: pitched.id, entropy: PITCH_ENTROPY[best], match: best }
 }
 
 /** Subtract a planned payment from the live source pools. Mutates in place —
@@ -184,4 +224,21 @@ export function applyPlanToSources(
  *  has none, so the first card of a chain pays from the pool and pitches only. */
 export function chainOutputs(lastSlotOutputs: PipCounts | undefined): PipCounts {
   return lastSlotOutputs ?? zeroPips()
+}
+
+/**
+ * The slot whose outputs fund the next play.
+ *
+ * Face-down CALL slots are SKIPPED for produce/consume purposes (owner ruling,
+ * 2026-08-10) — they contribute to the eval but sit outside the resource flow,
+ * so the chain looks *through* them to the last face-up card.
+ */
+export function lastPayingSlot<T extends { faceDown: boolean }>(
+  slots: T[],
+): T | undefined {
+  for (let i = slots.length - 1; i >= 0; i--) {
+    const slot = slots[i]!
+    if (!slot.faceDown) return slot
+  }
+  return undefined
 }

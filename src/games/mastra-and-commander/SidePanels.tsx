@@ -4,7 +4,7 @@
  */
 import * as React from 'react'
 import type { MCState } from './types'
-import { RAG_STEP_COUNT, CLAW_COMPLETE_COUNT } from './constants'
+import { RAG_CHAPTERS, CLAW_COMPLETE_COUNT } from './constants'
 import { getEvalCard, getFeatureCard, getOperatorCard } from './cards/registry'
 import { contextSize, contributionsOf, matchEval } from './rules/evalHelpers'
 import { C, COLOR_SWATCH, SHAPE_GLYPH, panel } from './theme'
@@ -79,15 +79,37 @@ export function SidePanels({ G }: { G: MCState }): React.ReactElement {
       <Section title="SUBSYSTEMS">
         <div style={{ fontSize: '0.8rem', lineHeight: 1.7 }}>
           <div>
-            RAG {G.ragSteps.length}/{RAG_STEP_COUNT}
-            {G.ragLockedContribution && (
-              <span style={{ color: COLOR_SWATCH[G.ragLockedContribution.color], marginLeft: 6 }}>
-                locked {SHAPE_GLYPH[G.ragLockedContribution.shape]}
+            RAG{' '}
+            {RAG_CHAPTERS.map((chapter, ix) => (
+              <span
+                key={chapter.key}
+                style={{
+                  color: ix < G.rag.chaptersComplete ? C.accent : C.dim,
+                  marginRight: 5,
+                }}
+                title={`${chapter.name} — costs ${chapter.cost}`}
+              >
+                {ix < G.rag.chaptersComplete ? '●' : '○'}{chapter.name}
+              </span>
+            ))}
+            {G.rag.contribution.length > 0 && (
+              <span style={{ marginLeft: 4 }}>
+                → {G.rag.contribution.map((contrib, i) => (
+                  <span key={i} style={{ color: COLOR_SWATCH[contrib.color] }}>
+                    {SHAPE_GLYPH[contrib.shape]}
+                  </span>
+                ))}
               </span>
             )}
           </div>
           <div>Claw {G.clawHand.length > 0 ? 'complete' : `${G.clawPile.length}/${CLAW_COMPLETE_COUNT}`}</div>
-          <div>Processes {G.contexts.length}/{G.processLimit}</div>
+          <div>
+            Contexts {G.contexts.length}
+            <span style={{ color: C.dim }}>
+              {' '}(ceiling {G.contexts[0]?.ceiling ?? '—'}; {G.processLimit} process
+              {G.processLimit === 1 ? '' : 'es'})
+            </span>
+          </div>
           <div>
             Servers {G.servers.length}
             {G.servers.length > 0 && (
@@ -95,6 +117,13 @@ export function SidePanels({ G }: { G: MCState }): React.ReactElement {
                 {' '}({G.servers.map((s) => getOperatorCard(s.traitCardId).name).join(', ')})
               </span>
             )}
+          </div>
+          <div>
+            Skills{' '}
+            {G.skillAttachments.length > 0
+              ? G.skillAttachments.map((a) =>
+                `${getOperatorCard(a.skillCardId).name}→${a.equipmentId.replace('TEST-EQ-', '')}`).join(', ')
+              : <span style={{ color: C.dim }}>none attached</span>}
           </div>
           <div>
             Features{' '}

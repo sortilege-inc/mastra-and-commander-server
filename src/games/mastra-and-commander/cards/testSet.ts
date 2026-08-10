@@ -25,14 +25,11 @@ const c = (color: Color, shape: Shape): Contribution => ({ color, shape })
 
 // ── Commander (placeholder) ───────────────────────────────────────────────
 
-export const TEST_COMMANDER: CommanderDef = {
-  id: 'TEST-COMMANDER',
-  name: 'Mastra (placeholder)',
-  abilityCostPip: 'attention',
-  abilityGrant: ['technology', 'technology', 'technology'],
-  rulesText:
-    'Pitch a card whose cost includes {eye}: gain {gear}{gear}{gear} this round. ' +
-    '(Placeholder — the printed card is pending redesign.)',
+export const MASTRA_COMMANDER: CommanderDef = {
+  id: 'MASTRA',
+  name: 'Mastra',
+  freeTrait: 'Agent',
+  rulesText: 'The first Agent played each round has no cost and incurs no Entropy.',
 }
 
 // ── Operator cards ────────────────────────────────────────────────────────
@@ -63,7 +60,9 @@ export const OPERATOR_CARDS: OperatorCardDef[] = [
     id: 'TEST-OP-SUBAGENT',
     name: 'Subagent',
     supertype: 'ephemeral',
-    traits: ['Agent'],
+    // The Subagent trait opens a nested context whose cards don't count against
+    // the parent window's ceiling.
+    traits: ['Agent', 'Subagent'],
     consume: ['technology', 'generic'],
     produce: ['attention', 'generic'],
     contributes: [c('cyan', 'triangle')],

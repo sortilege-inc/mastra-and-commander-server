@@ -10,7 +10,8 @@ import type { MCState } from '../types'
 import { getOperatorCard } from '../cards/registry'
 import { applyPlanToSources, planPayment, toPipCounts } from './ioFlow'
 import {
-  ecosystemDiscount, executePitches, feedCostOf, feedEntropy, log, removeFromHands,
+  ecosystemDiscount, executePitches, feedCostOf, feedEntropy, log,
+  refillHand, removeFromHands,
 } from './playHelpers'
 import type { MoveCtx } from './playMoves'
 
@@ -49,12 +50,13 @@ export function playResponse(
     def.consume,
     { prevOutputs: toPipCounts([]), roundPool: G.roundPool },
     pitchDefs,
+    def,
     ecosystemDiscount(G, def),
   )
   if (!result.ok) return INVALID_MOVE
 
   applyPlanToSources(result.plan, null, G.roundPool)
-  executePitches(G, pitchIds, `playing ${def.name}`)
+  executePitches(G, result.plan.pitches, `playing ${def.name}`)
   removeFromHands(G, cardId)
   G.operatorDiscard.push(cardId)
   log(G, `response: ${def.name}`)
@@ -79,4 +81,5 @@ export function playResponse(
   }
 
   feedEntropy(G, feedCostOf(def), `played ${def.name}`)
+  refillHand(G, `played ${def.name}`)
 }

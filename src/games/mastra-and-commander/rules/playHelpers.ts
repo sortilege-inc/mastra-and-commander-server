@@ -6,10 +6,13 @@
  * These mutate the state in place — callers pass Immer drafts from move
  * handlers (boardgame.io v0.50 wraps G in Immer).
  */
-import { DEFAULT_ENTROPY_FEED, ECOSYSTEM_DISCOUNT_PIPS } from '../constants'
+import {
+  DEFAULT_ENTROPY_FEED, ECOSYSTEM_DISCOUNT_PIPS, HAND_SIZE,
+} from '../constants'
 import type { MCState } from '../types'
 import { getOperatorCard } from '../cards/registry'
 import type { OperatorCardDef } from '../cards/types'
+import type { PitchAssignment } from './ioFlow'
 
 /** Append a line to the play log. */
 export function log(G: MCState, line: string): void {
@@ -76,15 +79,19 @@ export function feedEntropy(G: MCState, n: number, reason: string): number {
 export const feedCostOf = (def: OperatorCardDef): number =>
   def.entropyFeed ?? DEFAULT_ENTROPY_FEED
 
-/** Every Operator card currently in play (contexts, servers, RAG track) —
- *  the population the ecosystem discount and targeted Entropy look at. */
+/** Every Operator card currently in play (face-up Context cards, installed
+ *  servers, attached Skills) — the population the ecosystem discount and
+ *  targeted Entropy look at. Face-down CALL slots are excluded: their printed
+ *  face is irrelevant while they sit face-down. */
 export function cardsInPlay(G: MCState): string[] {
   const ids: string[] = []
   for (const chain of G.contexts) {
-    for (const slot of chain.slots) ids.push(slot.cardId)
+    for (const slot of chain.slots) {
+      if (!slot.faceDown) ids.push(slot.cardId)
+    }
   }
   for (const server of G.servers) ids.push(server.traitCardId)
-  ids.push(...G.ragSteps)
+  for (const attachment of G.skillAttachments) ids.push(attachment.skillCardId)
   return ids
 }
 
@@ -121,16 +128,33 @@ export function removeFromHands(G: MCState, cardId: string): 'hand' | 'claw' | n
   return null
 }
 
-/** Pitch cards to pay a cost: hand → discard, draw 1 each, feed Entropy each.
- *  All three are locked rules (design §4). */
-export function executePitches(G: MCState, pitchIds: string[], reason: string): void {
-  for (const id of pitchIds) {
-    removeFromHands(G, id)
-    G.operatorDiscard.push(id)
-    feedEntropy(G, feedCostOf(getOperatorCard(id)), `pitched ${id}`)
+/**
+ * Refill the hand to HAND_SIZE (owner ruling, 2026-08-10).
+ *
+ * Called after every action that spends cards. The hand is a constant; the
+ * DECK is what depletes — and running it out is one of the two ways the game
+ * can end (see phaseHelpers.endMatch).
+ */
+export function refillHand(G: MCState, reason: string): number {
+  const needed = HAND_SIZE - G.operatorHand.length
+  if (needed <= 0) return 0
+  return draw(G, needed, reason)
+}
+
+/**
+ * Pitch cards to pay a cost: hand → discard, feed Entropy per the pitch's
+ * contribution match (1 exact / 2 partial / 3 neither), then refill.
+ */
+export function executePitches(
+  G: MCState,
+  pitches: PitchAssignment[],
+  reason: string,
+): void {
+  for (const { cardId, entropy, match } of pitches) {
+    const def = getOperatorCard(cardId)
+    removeFromHands(G, cardId)
+    G.operatorDiscard.push(cardId)
+    feedEntropy(G, entropy, `pitched ${def.name} (${match} match)`)
   }
-  if (pitchIds.length > 0) {
-    // Locked: "You draw one card for every card pitched."
-    draw(G, pitchIds.length, `${reason} pitches`)
-  }
+  if (pitches.length > 0) refillHand(G, `${reason} pitches`)
 }

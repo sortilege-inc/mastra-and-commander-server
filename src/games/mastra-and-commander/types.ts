@@ -18,9 +18,29 @@
  */
 import type { Contribution, PipCounts, RoundPhase } from './constants'
 
+/**
+ * What an installed resource a face-down CALL slot is invoking.
+ *
+ * Installed Tools, attached Skills, and a completed RAG track do NOT score on
+ * their own (owner ruling, 2026-08-10). To use one in an eval you play a card
+ * face-down into the Context — free, since the Entropy was paid at install —
+ * and the called resource's Contribution is what lands in the Context.
+ */
+export type CallTarget =
+  | { kind: 'server'; index: number }
+  | { kind: 'skill'; equipmentId: string }
+  | { kind: 'rag' }
+
 /** One card in a Context chain, with its unspent outputs and round-state marks. */
 export interface ContextSlot {
+  /** The card physically occupying the slot. For a CALL this is the face-down
+   *  card spent to make the call — its own printed face is irrelevant. */
   cardId: string
+  /** True for a face-down CALL slot (see CallTarget). */
+  faceDown: boolean
+  /** Set on a CALL slot: the installed resource being invoked, whose
+   *  Contribution this slot supplies. Null for a normally-played card. */
+  calls: CallTarget | null
   /** This card's produce, minus whatever the next card has already spent.
    *  Design §4: a card's outputs fund the NEXT card's inputs. */
   outputsRemaining: PipCounts
@@ -31,13 +51,52 @@ export interface ContextSlot {
   subverted: boolean
 }
 
-/** One Process's line of execution — the left→right context window (design §4).
- *  Parallelism opens additional concurrent chains. */
+/** A Skill attached to a loadout item (rig / cloud). Gains Durable and
+ *  persists; reached by playing a face-down CALL. */
+export interface SkillAttachment {
+  equipmentId: string
+  skillCardId: string
+}
+
+/**
+ * The RAG track — a setup saga (owner ruling, 2026-08-10).
+ *
+ * In play from the start. Chapters advance one at a time, each costing a pip of
+ * its own type (RAG_CHAPTERS). The card fed to Upsert sets `contribution`,
+ * which is what a CALL to RAG supplies; the optional Rerank chapter swaps that
+ * payload for another of the same size.
+ */
+export interface RagTrack {
+  /** How many chapters are complete — an index into RAG_CHAPTERS. */
+  chaptersComplete: number
+  /** The card fed to Upsert; its Contribution is RAG's payload. */
+  upsertCardId: string | null
+  /** What a CALL to RAG contributes. Set at Upsert, swappable by Rerank. */
+  contribution: Contribution[]
+  /** True once Rerank has been used (it is a one-shot swap). */
+  rerankUsed: boolean
+}
+
+/** One context window — the left→right chain (design §4). Parallelism opens
+ *  additional concurrent Processes; a Subagent opens a nested sub-context. */
 export interface ContextChain {
   slots: ContextSlot[]
   /** A closed Process still scores (design §4: "closes out with or without
    *  your results") but takes no further cards. */
   closed: boolean
+  /**
+   * How many cards this window can hold (owner ruling, 2026-08-10). Set from
+   * the Objective's `contextCeiling`, defaulting to DEFAULT_CONTEXT_CEILING.
+   */
+  ceiling: number
+  /**
+   * Index of the chain whose Subagent spawned this one, or null for a
+   * top-level Process. A sub-context's cards do NOT count against its parent's
+   * ceiling — delegating is how you exceed one window's capacity.
+   */
+  parentChainIx: number | null
+  /** The Subagent card that owns this sub-context (null at top level). */
+  ownerCardId: string | null
 }
 
 /** An installed server (design §4): a face-down substrate card with a
@@ -67,8 +126,11 @@ export interface MCState {
   round: number
   phase: RoundPhase
   roundResults: RoundResult[]
-  /** Set once the match ends (BEST-GUESS(Q13): after MATCH_ROUNDS rounds). */
+  /** Set once the match ends — after MATCH_ROUNDS evals, or when the Operator
+   *  cycles through their deck (owner ruling, 2026-08-10). */
   matchWinner: 'operator' | 'entropy' | null
+  /** Why the match ended, for the UI. */
+  matchEndReason: 'rounds' | 'deckOut' | null
   /** Human-readable play log, newest last. */
   log: string[]
 
@@ -89,13 +151,16 @@ export interface MCState {
   /** Free resources granted this round by equipment / model / servers. Spent,
    *  never tapped; zeroed at rollover. */
   roundPool: PipCounts
+  /** Installed MCP servers — a Tool over a face-down substrate. Persist for
+   *  the whole match; reached by a face-down CALL. */
   servers: ServerInstall[]
+  /** Skills attached to loadout items. Persist; reached by a CALL. */
+  skillAttachments: SkillAttachment[]
+  /** Set once the commander's free Agent has been used this round. */
+  commanderFreeAgentUsed: boolean
 
-  // ── RAG track (design §4: 4 steps; completing clears random Entropy) ─────
-  ragSteps: string[]
-  /** Locked to the final card's contribution once the track completes; then
-   *  contributes toward every eval until reset. */
-  ragLockedContribution: Contribution | null
+  // ── RAG — the setup saga ────────────────────────────────────────────────
+  rag: RagTrack
 
   // ── Claw (design §4: face-down loader → second parallel hand) ────────────
   /** Face-down; hidden from the opponent. */

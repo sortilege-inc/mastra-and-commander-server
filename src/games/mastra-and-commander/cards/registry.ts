@@ -16,7 +16,7 @@ import type {
 } from './types'
 import {
   ENTROPY_CARDS, EQUIPMENT, EVAL_CARDS, FEATURE_CARDS, MODELS, OPERATOR_CARDS,
-  TEST_COMMANDER,
+  MASTRA_COMMANDER,
 } from './testSet'
 
 function index<T extends { id: string }>(defs: T[]): Record<string, T> {
@@ -34,7 +34,7 @@ const EVAL_BY_ID = index(EVAL_CARDS)
 const FEATURE_BY_ID = index(FEATURE_CARDS)
 const EQUIPMENT_BY_ID = index(EQUIPMENT)
 const MODEL_BY_ID = index(MODELS)
-const COMMANDER_BY_ID = index([TEST_COMMANDER])
+const COMMANDER_BY_ID = index([MASTRA_COMMANDER])
 
 /**
  * The sentinel playerView.ts substitutes for a card the viewer may not see.
@@ -77,8 +77,7 @@ const HIDDEN_DEFS: Record<string, unknown> = {
     id: HIDDEN_ID, name: 'Hidden model', grants: [], rulesText: '',
   } satisfies ModelDef,
   commander: {
-    id: HIDDEN_ID, name: 'Hidden commander', abilityCostPip: 'generic',
-    abilityGrant: [], rulesText: '',
+    id: HIDDEN_ID, name: 'Hidden commander', freeTrait: '', rulesText: '',
   } satisfies CommanderDef,
 }
 

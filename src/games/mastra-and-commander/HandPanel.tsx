@@ -9,32 +9,40 @@ import * as React from 'react'
 import type { MCState } from './types'
 import { getCommander, getEquipment, getModel, getOperatorCard } from './cards/registry'
 import { C, COLOR_SWATCH, PIP_GLYPH, SHAPE_GLYPH, btn, panel } from './theme'
-import { TRAIT_EVENT, TRAIT_MODEL, TRAIT_RESPONSE, INSTALLABLE_TRAITS } from './constants'
+import { TRAIT_EVENT, TRAIT_MODEL, TRAIT_RESPONSE } from './constants'
 import type { Pip } from './constants'
+import type { CallTarget } from './types'
 
 const pipRow = (pips: Pip[]): string =>
   pips.map((p) => PIP_GLYPH[p] ?? '?').join('') || '—'
 
 export function HandPanel({
-  G, selectedPitches, onTogglePitch, onPlay, onEvent, onResponse, onCommander,
-  onRag, onClaw, onUpgrade, onInstall,
+  G, selectedPitches, callTargets, onTogglePitch, onPlay, onEvent, onResponse,
+  onCall, onAttachSkill, onClaw, onUpgrade, onInstallTool, onStageSubstrate,
 }: {
   G: MCState
   selectedPitches: string[]
+  callTargets: Array<{ target: CallTarget; label: string }>
   onTogglePitch: (cardId: string) => void
   onPlay: (cardId: string) => void
   onEvent: (cardId: string) => void
   onResponse: (cardId: string) => void
-  onCommander: (cardId: string) => void
-  onRag: (cardId: string) => void
+  onCall: (cardId: string, target: CallTarget) => void
+  onAttachSkill: (cardId: string, equipmentId: string) => void
   onClaw: (cardId: string) => void
   onUpgrade: (cardId: string) => void
-  onInstall: (cardId: string) => void
+  /** Install this Tool onto the staged face-down substrate. */
+  onInstallTool: (cardId: string) => void
+  /** Stage this card as the face-down substrate for the next install. */
+  onStageSubstrate: (cardId: string) => void
 }): React.ReactElement {
   const commander = getCommander(G.commanderId)
   const model = getModel(G.installedModelId)
   const inPlay = G.phase === 'play'
   const inResponse = G.phase === 'response'
+  /** Loadout slots with no Skill on them yet. */
+  const freeEquipment = G.loadout.filter(
+    (id) => !G.skillAttachments.some((a) => a.equipmentId === id))
 
   const renderCard = (cardId: string, ix: number, fromClaw: boolean) => {
     const def = getOperatorCard(cardId)
@@ -42,7 +50,8 @@ export function HandPanel({
     const isEvent = def.traits.includes(TRAIT_EVENT)
     const isResponse = def.traits.includes(TRAIT_RESPONSE)
     const isModel = def.traits.includes(TRAIT_MODEL)
-    const installable = def.traits.some((t) => (INSTALLABLE_TRAITS as readonly string[]).includes(t))
+    const isTool = def.traits.includes('Tool') || def.traits.includes('MCP')
+    const isSkill = def.traits.includes('Skill')
 
     return (
       <div
@@ -93,14 +102,49 @@ export function HandPanel({
           {inPlay && isModel && (
             <button style={btn()} onClick={() => onUpgrade(cardId)}>upgrade</button>
           )}
-          {inPlay && installable && (
-            <button style={btn()} onClick={() => onInstall(cardId)}>install</button>
+          {/* Tool: install as a persistent MCP server (Durable) — needs a
+              face-down substrate, staged by clicking `substrate` on any card. */}
+          {inPlay && isTool && (
+            <button
+              style={btn()}
+              onClick={() => onInstallTool(cardId)}
+              title="Install as an MCP server: Durable, persists all match, 2 Entropy. Stage a substrate first."
+            >
+              install
+            </button>
           )}
+          {/* Skill: attach to a free loadout slot, gaining Durable. */}
+          {inPlay && isSkill && freeEquipment.map((equipmentId) => (
+            <button
+              key={equipmentId}
+              style={btn()}
+              onClick={() => onAttachSkill(cardId, equipmentId)}
+              title="Attach to this loadout item: Durable, persists all match"
+            >
+              →{getEquipment(equipmentId).name}
+            </button>
+          ))}
+          {/* Any card can be spent face-down to CALL an installed resource. */}
+          {inPlay && callTargets.map(({ target, label }, i) => (
+            <button
+              key={i}
+              style={{ ...btn(), borderColor: C.warn, color: C.warn }}
+              onClick={() => onCall(cardId, target)}
+              title="Play face-down to invoke this installed resource — free"
+            >
+              call {label}
+            </button>
+          ))}
           {inPlay && !fromClaw && (
             <>
-              <button style={btn()} onClick={() => onRag(cardId)}>→RAG</button>
               <button style={btn()} onClick={() => onClaw(cardId)}>→claw</button>
-              <button style={btn()} onClick={() => onCommander(cardId)}>→cmdr</button>
+              <button
+                style={btn()}
+                onClick={() => onStageSubstrate(cardId)}
+                title="Stage as the face-down substrate for a server install"
+              >
+                substrate
+              </button>
             </>
           )}
         </div>
@@ -115,6 +159,14 @@ export function HandPanel({
         <div>
           <div style={{ fontSize: '0.7rem', color: C.dim }}>COMMANDER</div>
           <div style={{ fontSize: '0.85rem' }}>{commander.name}</div>
+          <div style={{
+            fontSize: '0.7rem',
+            color: G.commanderFreeAgentUsed ? C.dim : C.accent,
+          }}>
+            {G.commanderFreeAgentUsed
+              ? 'free Agent used'
+              : `free ${commander.freeTrait} available`}
+          </div>
         </div>
         <div>
           <div style={{ fontSize: '0.7rem', color: C.dim }}>MODEL</div>
