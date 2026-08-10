@@ -1,0 +1,56 @@
+# --- Dependencies -------------------------------------------------------
+node_modules/
+
+# --- Build outputs ------------------------------------------------------
+dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+
+# --- Vite ---------------------------------------------------------------
+.vite/
+
+# --- Logs ---------------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- Test / coverage ----------------------------------------------------
+coverage/
+.nyc_output/
+
+# --- Local scratch / temp ----------------------------------------------
+.tmp/
+.cache/
+
+# --- Environment / secrets ---------------------------------------------
+.env
+.env.local
+.env.*.local
+*.local
+
+# --- Editor / IDE -------------------------------------------------------
+# Whitelist .vscode/extensions.json (recommended extensions are useful to
+# share); ignore the rest of the editor settings, which are personal.
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.sw?
+
+# --- Player-provided assets (decks, card images, etc.) -----------------
+# Lives under public/ so Vite serves it at /player-assets/... at runtime;
+# gitignored because the contents are user-/license-specific. Once the
+# in-app Deck Import is wired for this game, drop exported decks here.
+public/player-assets/
+
+# --- OS junk ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini

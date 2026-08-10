@@ -1,0 +1,23 @@
+/* Global reset.
+ *
+ * The browser puts a default 8px margin on <body>. With nothing overriding it,
+ * that margin showed as a white frame around the whole app, and — because the
+ * board root is sized to the full viewport (minHeight: 100vh, full width) —
+ * those 8px margins pushed the content 16px past the viewport on both axes,
+ * forcing horizontal + vertical scrollbars.
+ *
+ * Zero the margin and paint the body in the app's dark base colour so no white
+ * shows through (during load, or wherever content is shorter than the
+ * viewport). The board paints its own #0d0d0d on top. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #0d0d0d;
+}
+
+#root {
+  /* Let the board's own 100vh root drive height; this just keeps the dark
+   * background filling the viewport before the board mounts. */
+  min-height: 100vh;
+}

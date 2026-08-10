@@ -1,0 +1,104 @@
+# mastra-and-commander-server — project rules
+
+## What this project is
+
+- The **play engine** for **Mastra & Commander**, built on
+  [boardgame.io](https://boardgame.io/) v0.50 + React 18 + TypeScript + Vite.
+- The framework layer is **ported from [tcggg](https://github.com/sortilege-inc/tcggg)**
+  (the sister multi-game play engine). It is multi-game by design: framework
+  code is game-agnostic; each game lives in its own subdirectory.
+- Current state is a **scaffold**: the shell runs, and the Mastra & Commander
+  game cycles the locked round loop as boardgame.io phases with no card
+  mechanics. A TicTacToe placeholder remains as a wiring baseline.
+
+The **card content, rules design, and printed frames** live in the sibling
+repo `../mastra-and-commander/` (Lens frame + Squib pipeline + `cards/`). This
+repo does NOT own card data or frame art — do not duplicate that work here.
+
+## The rules source of truth
+
+`../mastra-and-commander/cards/game-design.md` is the living design doc. It
+marks every decision 🔒 locked / 🟨 proposed / ❓ open. **Only 🔒-locked
+mechanics are safe to model in the engine.** The round-loop phases in
+`src/games/mastra-and-commander/Game.ts` are modeled precisely because §2 of
+that doc is locked.
+
+**Never invent rules from memory.** If a mechanic you need is still 🟨/❓, do
+not guess an implementation — surface it to the owner with the specific open
+question, an example, and a recommendation, and get sign-off first (see the
+global working agreement in `~/CLAUDE.md`). Building the un-settled subset and
+calling it done is a failure, not a caveat.
+
+## Architecture rules
+
+**Multi-game segregation is required.** Game-agnostic framework code lives
+under `src/framework/`. Game-specific code lives under
+`src/games/<game-id>/`. No mixing:
+
+- A file in `framework/` must not import from any specific game.
+- A game's code must not assume any other game exists.
+- `src/framework/registry.ts` is the **ONE** place allowed to import from
+  `src/games/...`, and only via each game's top-level `index.ts` entry point.
+
+Locked-in layout:
+
+```
+src/
+  main.tsx              Vite entry.
+  App.tsx               Shell: game-select → (deck-import) → game. Framework
+                        layer — imports games only via the registry.
+  framework/
+    GameSelect.tsx      Pick game + format + mode (localStorage memory).
+    registry.ts         Game registry (the games/ import seam).
+    types.ts            GameRegistration + DeckExport interfaces.
+    DeckImport.tsx      File-picker + paste import of an exported deck JSON.
+    storage.ts          localStorage helpers.
+    savedGame.ts        Save / restore an in-progress game.
+    replayTranscript.ts / replayVerifier.ts   Transcript record + verify.
+    aiDriver.ts         Framework hook for a game's AI policy.
+    Card*/HoverCardImage/cardImages   Card catalog + image helpers.
+  games/
+    mastra-and-commander/
+      index.ts          Exports the GameRegistration.
+      Game.ts           boardgame.io definition (round-loop phases; scaffold).
+      Board.tsx         Renderer.
+    tic-tac-toe/        boardgame.io hello-world; wiring baseline.
+```
+
+**Adding a game** = add `src/games/<id>/` with an `index.ts` exporting a
+`GameRegistration`, then register it in `registry.ts`. Nothing else in the
+framework should need to change.
+
+**Game / format / mode selection on load** (framework behavior):
+
+- First visit → pick game, then format, then play mode.
+- Choice persisted in localStorage; returning visitors skip straight ahead.
+- A "Switch game" link returns to the picker.
+
+## What goes here
+
+- boardgame.io `Game` definitions (state, moves, phases, end conditions).
+- Board / UI components for in-game state.
+- Pure-function rule helpers used by moves.
+- Deck import flow (parse + validate an exported deck JSON), once this game
+  defines decks.
+- The game-selection / format-selection shell; eventual multiplayer + lobby.
+
+## What does NOT go here
+
+- Card catalog authoring or the printed-frame pipeline (that's
+  `../mastra-and-commander/`).
+- Card art / Squib rendering.
+- Any rules content not yet 🔒-locked in the design doc.
+
+## Working style notes (also see ~/CLAUDE.md for global rules)
+
+- TypeScript strict; no `any` without justification.
+- Truth in reporting: never claim "done/passing/works" without, in the same
+  message, the command run and its result. `npm run typecheck` / `npm run
+  build` / `npm test` are the gates.
+- Keep framework code portable back to / from tcggg where reasonable — the two
+  share the game-agnostic shell. Divergence is fine when this game needs it,
+  but note it (see the "carried over from tcggg" section of the README).
+- Never write rules / facts from memory; cite `game-design.md` and only model
+  🔒-locked mechanics.
