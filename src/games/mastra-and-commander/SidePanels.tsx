@@ -1,0 +1,133 @@
+/**
+ * Side panels: the current objective, the Entropy stack, the subsystems
+ * (RAG / servers / claw / features), the round record, and the log.
+ */
+import * as React from 'react'
+import type { MCState } from './types'
+import { RAG_STEP_COUNT, CLAW_COMPLETE_COUNT } from './constants'
+import { getEvalCard, getFeatureCard, getOperatorCard } from './cards/registry'
+import { contextSize, contributionsOf, matchEval } from './rules/evalHelpers'
+import { C, COLOR_SWATCH, SHAPE_GLYPH, panel } from './theme'
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={panel}>
+      <div style={{ fontSize: '0.72rem', color: C.dim, letterSpacing: 1, marginBottom: 6 }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+export function SidePanels({ G }: { G: MCState }): React.ReactElement {
+  const evalDef = G.currentEvalId ? getEvalCard(G.currentEvalId) : null
+  const contribs = contributionsOf(G)
+  const size = contextSize(G)
+  const met = evalDef ? matchEval(contribs, evalDef) : false
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 320 }}>
+      {/* Objective */}
+      <Section title="OBJECTIVE">
+        {evalDef ? (
+          <>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>{evalDef.name}</div>
+            <div style={{ fontSize: '0.8rem', color: C.dim, marginBottom: 6 }}>
+              {evalDef.rulesText}
+            </div>
+            <div style={{ fontSize: '0.78rem' }}>
+              par {evalDef.par}
+              {evalDef.superiorAt !== undefined && ` · superior ≤${evalDef.superiorAt}`}
+              {' · difficulty '}{evalDef.difficulty}
+            </div>
+            <div style={{ fontSize: '0.78rem', marginTop: 6 }}>
+              context {size} · pattern{' '}
+              <strong style={{ color: met ? C.accent : C.danger }}>
+                {met ? 'MET' : 'not met'}
+              </strong>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              {contribs.map((contrib, i) => (
+                <span key={i} style={{ color: COLOR_SWATCH[contrib.color], marginRight: 3 }}>
+                  {SHAPE_GLYPH[contrib.shape]}
+                </span>
+              ))}
+              {contribs.length === 0 && <span style={{ color: C.dim }}>no contributions yet</span>}
+            </div>
+          </>
+        ) : (
+          <span style={{ color: C.dim }}>No objective.</span>
+        )}
+      </Section>
+
+      {/* Entropy */}
+      <Section title="ENTROPY">
+        <div style={{ fontSize: '0.85rem' }}>
+          stack <strong style={{ color: G.entropyStack.length > 0 ? C.danger : C.accent }}>
+            {G.entropyStack.length}
+          </strong>
+          {' · '}deck {G.entropyDeck.length}
+          {' · '}resolved {G.entropyResolved.length}
+        </div>
+        <div style={{ fontSize: '0.78rem', color: C.dim, marginTop: 4 }}>
+          fed this round: {G.entropyFedThisRound}
+        </div>
+      </Section>
+
+      {/* Subsystems */}
+      <Section title="SUBSYSTEMS">
+        <div style={{ fontSize: '0.8rem', lineHeight: 1.7 }}>
+          <div>
+            RAG {G.ragSteps.length}/{RAG_STEP_COUNT}
+            {G.ragLockedContribution && (
+              <span style={{ color: COLOR_SWATCH[G.ragLockedContribution.color], marginLeft: 6 }}>
+                locked {SHAPE_GLYPH[G.ragLockedContribution.shape]}
+              </span>
+            )}
+          </div>
+          <div>Claw {G.clawHand.length > 0 ? 'complete' : `${G.clawPile.length}/${CLAW_COMPLETE_COUNT}`}</div>
+          <div>Processes {G.contexts.length}/{G.processLimit}</div>
+          <div>
+            Servers {G.servers.length}
+            {G.servers.length > 0 && (
+              <span style={{ color: C.dim }}>
+                {' '}({G.servers.map((s) => getOperatorCard(s.traitCardId).name).join(', ')})
+              </span>
+            )}
+          </div>
+          <div>
+            Features{' '}
+            {G.activeFeatureIds.length > 0
+              ? G.activeFeatureIds.map((id) => getFeatureCard(id).name).join(', ')
+              : <span style={{ color: C.dim }}>none</span>}
+          </div>
+        </div>
+      </Section>
+
+      {/* Record */}
+      {G.roundResults.length > 0 && (
+        <Section title="RECORD">
+          {G.roundResults.map((r, i) => (
+            <div key={i} style={{ fontSize: '0.8rem' }}>
+              R{r.round} {getEvalCard(r.evalId).name}:{' '}
+              <strong style={{ color: r.tier === 'failure' ? C.danger : C.accent }}>
+                {r.tier}
+              </strong>
+            </div>
+          ))}
+        </Section>
+      )}
+
+      {/* Log */}
+      <Section title="LOG">
+        <div style={{
+          maxHeight: 220, overflowY: 'auto', fontSize: '0.72rem',
+          fontFamily: 'ui-monospace, monospace', color: C.dim, lineHeight: 1.6,
+        }}>
+          {G.log.slice(-40).map((line, i) => <div key={i}>{line}</div>)}
+        </div>
+      </Section>
+    </div>
+  )
+}

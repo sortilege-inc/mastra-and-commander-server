@@ -1,14 +1,33 @@
 /**
- * Renderer for the Mastra & Commander scaffold.
+ * Board — composition root for the play UI.
  *
- * Shows the locked round loop (game-design.md §2) as a five-step stepper,
- * highlights the current phase, and offers a single "Advance" control that
- * steps to the next phase. This is a wiring proof, not the real board —
- * there is no Context row, Eval hand, Entropy stack, or card UI yet.
+ * Layout:
+ *   ┌──────────────────────────────────────────┬──────────────┐
+ *   │ header: round, phase stepper, advance    │              │
+ *   │ Context (one row per Process)            │  SidePanels  │
+ *   │ HandPanel (rail + hand + claw hand)      │              │
+ *   └──────────────────────────────────────────┴──────────────┘
+ * Gate overlays render on top when a pending* field is set.
+ *
+ * SOLO DRIVER: design §3 says the Entropy deck "runs itself" in solo play. The
+ * engine is mode-agnostic (the framework's GameMode never reaches setup()), so
+ * the automation lives here: in `vs-ai` mode this component auto-dispatches the
+ * Entropy-seat moves. That's the same seam framework/aiDriver.ts formalizes.
  */
 import * as React from 'react'
 import type { BoardProps } from 'boardgame.io/react'
-import { ROUND_PHASES, PHASE_BLURB, type MastraCommanderState, type RoundPhase } from './Game'
+import type { MCState } from './types'
+import { PHASE_BLURB, ROUND_PHASES } from './constants'
+import type { RoundPhase } from './constants'
+import { useGameMode } from '../../framework/ModeContext'
+import { ContextRow } from './ContextRow'
+import { HandPanel } from './HandPanel'
+import { SidePanels } from './SidePanels'
+import {
+  EntropyTargetOverlay, FailureScrapOverlay, FeaturePickOverlay,
+} from './GateOverlays'
+import type { EntropyTarget } from './rules/entropyHelpers'
+import { C, btn } from './theme'
 
 const PHASE_LABEL: Record<RoundPhase, string> = {
   reveal: '1 · Reveal',
@@ -18,63 +37,183 @@ const PHASE_LABEL: Record<RoundPhase, string> = {
   evalCheck: '5 · Eval check',
 }
 
-export function Board(props: BoardProps<MastraCommanderState>): React.ReactElement {
+export function Board(props: BoardProps<MCState>): React.ReactElement {
   const { G, ctx, moves } = props
-  const current = (ctx.phase ?? 'reveal') as RoundPhase
+  const mode = useGameMode()
+  const [pitches, setPitches] = React.useState<string[]>([])
+  /** Which hand card is staged as a server substrate for the next install. */
+  const [substrate, setSubstrate] = React.useState<string | null>(null)
+
+  const clearPitches = () => setPitches([])
+
+  const togglePitch = (cardId: string) => {
+    setPitches((prev) => prev.includes(cardId)
+      ? prev.filter((id) => id !== cardId)
+      : [...prev, cardId])
+  }
+
+  // ── Solo driver ────────────────────────────────────────────────────────
+  // In vs-ai mode the Entropy deck plays itself: resolve the stack top, and
+  // auto-target anything that needs a target.
+  React.useEffect(() => {
+    if (mode !== 'vs-ai') return
+    if (G.matchWinner) return
+    if (G.phase !== 'entropy') return
+
+    const timer = setTimeout(() => {
+      if (G.pendingEntropyTarget) moves.autoResolveEntropyTarget()
+      else if (G.entropyStack.length > 0) moves.resolveNextEntropy()
+    }, 450)
+    return () => clearTimeout(timer)
+  }, [mode, G.phase, G.entropyStack.length, G.pendingEntropyTarget, G.matchWinner, moves])
+
+  const gameover = ctx.gameover as { winner?: string } | undefined
 
   return (
     <div style={{
-      padding: 32, color: '#eaeaea', background: '#0d0d0d',
-      minHeight: '100vh', fontFamily: 'system-ui, sans-serif',
+      padding: 20, color: C.text, background: C.bg, minHeight: '100vh',
+      fontFamily: 'system-ui, sans-serif',
     }}>
-      <h1 style={{ margin: 0, marginBottom: 4 }}>Mastra &amp; Commander</h1>
-      <p style={{ opacity: 0.6, marginTop: 0, marginBottom: 24 }}>
-        Play-engine scaffold — proves the boardgame.io wiring by cycling the
-        locked round loop. The real Context / Eval / Entropy board comes once
-        the design settles.
-      </p>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 10 }}>
+        <h1 style={{ margin: 0, fontSize: '1.3rem' }}>Mastra &amp; Commander</h1>
+        <span style={{ color: C.dim }}>Round {G.round}</span>
+        {mode === 'vs-ai' && (
+          <span style={{ color: C.accent, fontSize: '0.8rem' }}>solo — Entropy is automated</span>
+        )}
+      </div>
 
-      <div style={{ marginBottom: 8, opacity: 0.8 }}>Round <strong>{G.round}</strong></div>
-
-      {/* Round-loop stepper */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-        {ROUND_PHASES.map((p) => {
-          const active = p === current
+      {/* Phase stepper */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+        {ROUND_PHASES.map((phase) => {
+          const active = phase === G.phase
           return (
-            <div key={p} style={{
-              padding: '8px 14px', borderRadius: 6,
-              border: `1px solid ${active ? '#7fd1a2' : '#333'}`,
-              background: active ? '#173026' : '#161616',
-              color: active ? '#7fd1a2' : '#9a9a9a',
-              fontWeight: active ? 700 : 400,
+            <div key={phase} style={{
+              padding: '6px 12px', borderRadius: 6,
+              border: `1px solid ${active ? C.accent : C.border}`,
+              background: active ? C.accentBg : C.panel,
+              color: active ? C.accent : C.dim,
+              fontWeight: active ? 700 : 400, fontSize: '0.82rem',
             }}>
-              {PHASE_LABEL[p]}
+              {PHASE_LABEL[phase]}
             </div>
           )
         })}
       </div>
 
-      <p style={{ maxWidth: 620, minHeight: 40, lineHeight: 1.5 }}>
-        {PHASE_BLURB[current]}
+      <p style={{ color: C.dim, fontSize: '0.85rem', maxWidth: 720, margin: '0 0 12px' }}>
+        {PHASE_BLURB[G.phase]}
       </p>
 
-      <button
-        onClick={() => moves.advance()}
-        style={{
-          padding: '10px 18px', borderRadius: 6, border: '1px solid #7fd1a2',
-          background: '#173026', color: '#7fd1a2', cursor: 'pointer',
-          fontSize: '1rem', fontWeight: 600,
-        }}
-      >
-        Advance →
-      </button>
+      {/* Phase controls */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <button
+          style={btn(!gameover)}
+          onClick={() => { clearPitches(); moves.advancePhase() }}
+        >
+          Advance phase →
+        </button>
+        {G.phase === 'play' && G.contexts.length < G.processLimit && (
+          <button style={btn()} onClick={() => moves.openProcess()}>Open Process</button>
+        )}
+        {G.phase === 'play' && G.ragSteps.length > 0 && (
+          <button style={btn()} onClick={() => moves.resetRag()}>Reset RAG</button>
+        )}
+        {G.phase === 'entropy' && G.entropyStack.length > 0 && mode !== 'vs-ai' && (
+          <button
+            style={{ ...btn(), borderColor: C.danger, color: C.danger, background: C.dangerBg }}
+            onClick={() => moves.resolveNextEntropy()}
+          >
+            Resolve next Entropy ({G.entropyStack.length})
+          </button>
+        )}
+        {substrate && (
+          <span style={{ color: C.warn, fontSize: '0.82rem', alignSelf: 'center' }}>
+            substrate staged — click “install” on an MCP/Skill/Tool card
+          </span>
+        )}
+      </div>
 
-      <details style={{ marginTop: 28, opacity: 0.7 }}>
-        <summary style={{ cursor: 'pointer' }}>Phase log</summary>
-        <ul style={{ fontFamily: 'ui-monospace, monospace', fontSize: '0.85rem' }}>
-          {G.log.map((line, i) => <li key={i}>{line}</li>)}
-        </ul>
-      </details>
+      {gameover && (
+        <div style={{
+          padding: 12, marginBottom: 16, borderRadius: 8,
+          border: `1px solid ${C.accent}`, background: C.accentBg, color: C.accent,
+        }}>
+          <strong>Match over — {gameover.winner} wins.</strong>
+        </div>
+      )}
+
+      {/* Main columns */}
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 640px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <ContextRow
+            G={G}
+            canRelay={G.phase === 'evalCheck'}
+            onToggleRelay={(chainIx, slotIx) => moves.toggleRelay(chainIx, slotIx)}
+            onCloseProcess={(chainIx) => moves.closeProcess(chainIx)}
+          />
+          <HandPanel
+            G={G}
+            selectedPitches={pitches}
+            onTogglePitch={togglePitch}
+            onPlay={(cardId) => {
+              moves.playToContext(0, cardId, pitches.filter((id) => id !== cardId))
+              clearPitches()
+            }}
+            onEvent={(cardId) => {
+              moves.playEvent(cardId, pitches.filter((id) => id !== cardId))
+              clearPitches()
+            }}
+            onResponse={(cardId) => {
+              moves.playResponse(cardId, pitches.filter((id) => id !== cardId), 0, 0)
+              clearPitches()
+            }}
+            onCommander={(cardId) => { moves.useCommanderAbility(cardId); clearPitches() }}
+            onRag={(cardId) => { moves.buildRagStep(cardId); clearPitches() }}
+            onClaw={(cardId) => { moves.loadClaw(cardId); clearPitches() }}
+            onUpgrade={(cardId) => {
+              moves.upgradeModel(cardId, pitches.filter((id) => id !== cardId))
+              clearPitches()
+            }}
+            onInstall={(cardId) => {
+              if (!substrate) {
+                setSubstrate(cardId)
+                return
+              }
+              moves.installServer(substrate, cardId, pitches.filter(
+                (id) => id !== cardId && id !== substrate,
+              ))
+              setSubstrate(null)
+              clearPitches()
+            }}
+          />
+        </div>
+
+        <SidePanels G={G} />
+      </div>
+
+      {/* Gates */}
+      {G.pendingFeaturePicks && (
+        <FeaturePickOverlay
+          G={G}
+          onPick={(cardId) => moves.pickFeature(cardId)}
+          onSkip={() => moves.skipFeaturePicks()}
+        />
+      )}
+      {G.pendingEntropyTarget && mode !== 'vs-ai' && (
+        <EntropyTargetOverlay
+          G={G}
+          onChoose={(target: EntropyTarget) => moves.chooseEntropyTarget(target)}
+          onAuto={() => moves.autoResolveEntropyTarget()}
+        />
+      )}
+      {G.pendingFailureScrap && (
+        <FailureScrapOverlay
+          G={G}
+          onScrap={(cardId) => moves.scrapForEntropy(cardId)}
+          onAccept={() => moves.acceptOutcome()}
+        />
+      )}
     </div>
   )
 }

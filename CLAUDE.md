@@ -7,9 +7,11 @@
 - The framework layer is **ported from [tcggg](https://github.com/sortilege-inc/tcggg)**
   (the sister multi-game play engine). It is multi-game by design: framework
   code is game-agnostic; each game lives in its own subdirectory.
-- Current state is a **scaffold**: the shell runs, and the Mastra & Commander
-  game cycles the locked round loop as boardgame.io phases with no card
-  mechanics. A TicTacToe placeholder remains as a wiring baseline.
+- Current state is a **playable first pass**: the full round loop runs with the
+  pitch economy, Context I/O chain, Entropy stack + all three wrench vectors,
+  Eval scoring on the success ladder, and every subsystem (RAG, Claw, servers,
+  Features, Models, equipment, Processes, ecosystems). A TicTacToe placeholder
+  remains as a wiring baseline. Cards are synthetic `TEST-` placeholders.
 
 The **card content, rules design, and printed frames** live in the sibling
 repo `../mastra-and-commander/` (Lens frame + Squib pipeline + `cards/`). This
@@ -28,6 +30,19 @@ not guess an implementation — surface it to the owner with the specific open
 question, an example, and a recommendation, and get sign-off first (see the
 global working agreement in `~/CLAUDE.md`). Building the un-settled subset and
 calling it done is a failure, not a caveat.
+
+**Standing exception, owner-granted 2026-08-10:** for the *first-pass engine*,
+the owner explicitly signed off on implementing best-guess placeholder rules for
+every open question, so the game could be played and felt before the design
+settles. That sign-off came with a condition: **every invention is tagged
+`BEST-GUESS(Qn)` at its implementation site and listed in the README's
+"Best-guess registry"**, which is the owner's audit surface. This exception does
+NOT extend to new work — a mechanic added from here on still needs its own
+sign-off, and any change to a registered best-guess must update the registry.
+
+**Where the rules live:** balance and rule constants belong in `constants.ts`,
+not scattered through the rules modules. Revising a best-guess should usually be
+a one-line change there.
 
 ## Architecture rules
 

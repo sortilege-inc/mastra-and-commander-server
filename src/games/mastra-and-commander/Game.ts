@@ -1,100 +1,104 @@
 /**
- * Scaffold game: Mastra & Commander.
+ * Mastra & Commander — boardgame.io game definition.
  *
- * This is the play-engine analogue of tcggg's TicTacToe hello-world — it
- * exists to prove the client / state / phase wiring is healthy end-to-end
- * before the real engine is modeled. It deliberately implements NO card
- * mechanics: the design (../../../../mastra-and-commander/cards/game-design.md)
- * is still mostly proposed (🟨) / open (❓), and inventing rules here would
- * be guesswork.
+ * This file is a MANIFEST, not an implementation: setup, turn config, and a
+ * moves map of imported identifiers. Every move body lives in `rules/*Moves.ts`
+ * with its pure helpers in `rules/*Helpers.ts`. (Pattern borrowed from tcggg's
+ * L5R engine, where inlining move bodies here produced an unmaintainable
+ * thousand-line file.)
  *
- * What it DOES model is the one thing that's locked (🔒): the **round loop**
- * from game-design.md §2, as boardgame.io phases:
+ * WHY NO boardgame.io `phases`:
+ * The round loop lives in a flat `G.phase` field advanced by the `advancePhase`
+ * move. bg.io's `phases` scope the moves map and interact with turn order, but
+ * this game needs BOTH seats live inside a single phase — during the Entropy
+ * phase the Entropy player picks targets while the Operator draws a card per
+ * Entropy resolved. Modeling that with phases means constant `activePlayers`
+ * stage churn; a flat phase field with per-move guards is simpler and is what
+ * the pending-gate pattern wants anyway.
  *
- *   1. reveal    — Reveal an Objective from the Eval deck.
- *   2. play      — Operator builds the Context (pitch to pay, draw per pitch);
- *                  plays/pitches feed the Entropy economy.
- *   3. entropy   — Resolve accumulated Entropy in reverse order (LIFO);
- *                  draw one per Entropy resolved.
- *   4. response  — Operator plays responses to mitigate the Entropy.
- *   5. evalCheck — Compare the Context's contributions to the Objective and
- *                  resolve on the success ladder.
- *
- * `advance` steps to the next phase; after evalCheck the loop returns to
- * reveal for the next round (bumping the round counter). No win condition
- * yet — a scaffold cycles indefinitely until the real Eval check lands.
- *
- * Move-function signature (boardgame.io v0.50):
- *   ({ G, ctx, events, ...pluginAPIs, playerID }, ...args) => void | INVALID_MOVE
- * State mutates in-place via `G` (Immer under the hood).
+ * State is JSON-serializable throughout — see types.ts.
  */
 import type { Game } from 'boardgame.io'
+import type { MCState } from './types'
+import { buildInitialState } from './rules/setup'
+import { enterReveal } from './rules/phaseHelpers'
+import { playerView } from './playerView'
 
-/** The five locked round-loop phases, in order (game-design.md §2). */
-export const ROUND_PHASES = ['reveal', 'play', 'entropy', 'response', 'evalCheck'] as const
-export type RoundPhase = typeof ROUND_PHASES[number]
+// ── Moves ───────────────────────────────────────────────────────────────
+import { advancePhase } from './rules/phaseMoves'
+import { pickFeature, skipFeaturePicks } from './rules/revealMoves'
+import {
+  buildRagStep, closeProcess, installServer, loadClaw, openProcess, playEvent,
+  playToContext, resetRag, upgradeModel, useCommanderAbility,
+} from './rules/playMoves'
+import {
+  autoResolveEntropyTarget, chooseEntropyTarget, resolveNextEntropy,
+} from './rules/entropyMoves'
+import { playResponse } from './rules/responseMoves'
+import { acceptOutcome, scrapForEntropy, toggleRelay } from './rules/evalMoves'
 
-export interface MastraCommanderState {
-  /** 1-based round number; bumped each time the loop re-enters `reveal`. */
-  round: number
-  /** Human-readable trail of phase transitions, for the scaffold board. */
-  log: string[]
-}
+export type { MCState }
 
-/** Prose shown on the scaffold board for each phase (from §2). */
-export const PHASE_BLURB: Record<RoundPhase, string> = {
-  reveal: 'Reveal an Objective from the Eval deck (the target hand).',
-  play: 'Operator builds the Context: pitch cards to pay costs, draw one per pitch. Plays and pitches feed the Entropy economy.',
-  entropy: 'Resolve the accumulated Entropy in reverse order (LIFO). Draw one card per Entropy resolved.',
-  response: 'Operator plays responses to mitigate what the Entropy did.',
-  evalCheck: "Compare the Context's contributions to the Objective and resolve on the success ladder.",
-}
-
-/** Shared move: end the current phase. Each phase declares `next`, so
- *  boardgame.io routes to the correct successor. */
-const advance = ({ G, ctx, events }: { G: MastraCommanderState; ctx: { phase: string }; events: { endPhase: () => void } }) => {
-  G.log.push(`round ${G.round}: leaving “${ctx.phase}”`)
-  events.endPhase()
-}
-
-export const MastraCommander: Game<MastraCommanderState> = {
+export const MastraCommander: Game<MCState> = {
   name: 'mastra-and-commander',
-  // Asymmetric duel: Operator (P0) vs Entropy (P1). Solo play (design §3)
-  // will drive P1 from an automated Entropy deck later.
+
+  // Asymmetric, fixed sides (design §3): seat '0' is the Operator, seat '1' is
+  // Entropy. Solo play drives seat '1' from the Board (design §3: the Entropy
+  // deck "runs itself").
   minPlayers: 2,
   maxPlayers: 2,
 
-  setup: () => ({
-    round: 1,
-    log: ['round 1: revealed objective'],
-  }),
+  setup: ({ random }) => {
+    const G = buildInitialState(random)
+    // Round 1's Reveal runs through the same engine as every later round.
+    enterReveal(G)
+    return G
+  },
 
-  phases: {
-    reveal: {
-      start: true,
-      next: 'play',
-      moves: { advance },
-    },
-    play: {
-      next: 'entropy',
-      moves: { advance },
-    },
-    entropy: {
-      next: 'response',
-      moves: { advance },
-    },
-    response: {
-      next: 'evalCheck',
-      moves: { advance },
-    },
-    evalCheck: {
-      next: 'reveal',
-      moves: { advance },
-      // Leaving evalCheck closes the round; re-entering reveal opens the next.
-      onEnd: ({ G }) => {
-        G.round += 1
-        G.log.push(`round ${G.round}: revealed objective`)
-      },
-    },
+  // Both seats are always eligible to act; each move guards on phase, seat, and
+  // open gates. See the header for why this replaces bg.io phases.
+  turn: {
+    activePlayers: { all: 'play' },
+  },
+
+  playerView: ({ G, playerID }) => playerView(G, playerID),
+
+  moves: {
+    // ── Round loop ────────────────────────────────────────────────────
+    advancePhase,
+
+    // ── Phase 1 · Reveal — see rules/revealMoves.ts ────────────────────
+    pickFeature,
+    skipFeaturePicks,
+
+    // ── Phase 2 · Play — see rules/playMoves.ts ────────────────────────
+    playToContext,
+    playEvent,
+    useCommanderAbility,
+    installServer,
+    buildRagStep,
+    resetRag,
+    loadClaw,
+    upgradeModel,
+    openProcess,
+    closeProcess,
+
+    // ── Phase 3 · Entropy — see rules/entropyMoves.ts ──────────────────
+    resolveNextEntropy,
+    chooseEntropyTarget,
+    autoResolveEntropyTarget,
+
+    // ── Phase 4 · Response — see rules/responseMoves.ts ────────────────
+    playResponse,
+
+    // ── Phase 5 · Eval check — see rules/evalMoves.ts ──────────────────
+    toggleRelay,
+    scrapForEntropy,
+    acceptOutcome,
+  },
+
+  endIf: ({ G }) => {
+    if (G.matchWinner) return { winner: G.matchWinner }
+    return undefined
   },
 }

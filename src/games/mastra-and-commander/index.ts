@@ -1,11 +1,9 @@
-/** Per-game entry point — register Mastra & Commander with the framework.
- *  Currently a scaffold: it models the locked round loop only (see Game.ts).
- *  Formats / decks / real mechanics arrive as the design settles. */
+/** Per-game entry point — register Mastra & Commander with the framework. */
 import type { GameRegistration } from '../../framework/types'
-import { MastraCommander, type MastraCommanderState } from './Game'
+import { MastraCommander, type MCState } from './Game'
 import { Board } from './Board'
 
-export const mastraCommanderRegistration: GameRegistration<MastraCommanderState> = {
+export const mastraCommanderRegistration: GameRegistration<MCState> = {
   id: 'mastra-and-commander',
   name: 'Mastra & Commander',
   documentTitle: 'Mastra & Commander',
@@ -13,15 +11,15 @@ export const mastraCommanderRegistration: GameRegistration<MastraCommanderState>
   numPlayers: 2,
   game: MastraCommander,
   board: Board,
-  // Single scaffold format for now. Real formats (solo vs. two-player, pack
-  // configurations) come with the engine.
   formats: [
     {
-      id: 'scaffold',
-      name: 'Scaffold (round-loop wiring)',
-      description: 'Cycles the locked 5-phase round loop. No card mechanics yet.',
+      id: 'first-pass',
+      name: 'First pass',
+      description:
+        'The full round loop with placeholder cards. Many rules are best-guess '
+        + 'first passes pending design sign-off — see the README.',
     },
   ],
-  // No applyDeckExport/preloadDeck yet — the framework skips the deck-import
-  // flow and starts the game immediately, exactly like the TicTacToe scaffold.
+  // No applyDeckExport/preloadDeck yet: decks are built from the synthetic test
+  // set in setup(), so the framework skips the deck-import flow entirely.
 }
