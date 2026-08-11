@@ -132,6 +132,32 @@ never reaches `setup()`). In solo, `Board.tsx` auto-dispatches the Entropy
 seat's moves, auto-targeting the leftmost eligible target; in hotseat the
 Entropy player chooses via the overlay. Both drive the *same* moves.
 
+## Card art
+
+The board renders the **real printed faces** — the Squib/Ice-Chrome renders from
+the design repo — not bespoke UI cards. `public/cards/<cardId>.webp` holds one
+face per card plus the two deck backs (`back-operator`, `back-entropy`).
+
+These are **derived assets**, mirrored from
+`../mastra-and-commander/output/*.png` and downscaled (16.3 MB of PNG → 1.1 MB
+of WebP). They are committed so a clone is playable, but the design repo remains
+the source of truth — never hand-edit them. To refresh after a re-render:
+
+```bash
+python3 scripts/import-card-art.py
+```
+
+That script renames faces from their `cards.yml` position to the engine card id.
+The mapping is positional, so it **refuses to run** if the image count and its id
+list disagree rather than silently misaligning every card — if you add a card,
+update `ORDERED_IDS` to match `cards.yml`.
+
+Because the face already prints name, traits, cost, produce and contributions,
+the UI doesn't repeat them; it shows only what the card can't (outputs
+remaining, subverted/relay state, pitch marking). **Hover any card** for a
+readable 400px preview. A card with no art degrades to a text plate, so you can
+add cards before their art exists.
+
 ## Architecture: framework vs. game (required)
 
 Framework code (`src/framework/`) is **game-agnostic** and must not import

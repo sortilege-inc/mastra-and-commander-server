@@ -103,8 +103,16 @@ framework should need to change.
 
 - Card catalog authoring or the printed-frame pipeline (that's
   `../mastra-and-commander/`).
-- Card art / Squib rendering.
+- Card art *authoring* or Squib/SVG rendering.
 - Any rules content not yet 🔒-locked in the design doc.
+
+**Card art, precisely:** `public/cards/*.webp` are **derived assets** — the
+design repo's rendered PNGs (`../mastra-and-commander/output/`) downscaled for
+the web. They are checked in so a clone is playable, but they are NOT a source
+of truth: never hand-edit them, and never author art here. To refresh, re-render
+in the design repo and re-run the conversion (see the README's Card art section).
+`CardFace` degrades to a text plate when a card's art is missing, so adding a
+card before its art exists is fine.
 
 ## Working style notes (also see ~/CLAUDE.md for global rules)
 

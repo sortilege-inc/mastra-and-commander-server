@@ -29,7 +29,7 @@ export const MASTRA_COMMANDER: CommanderDef = {
   id: 'MASTRA',
   name: 'Mastra',
   freeTrait: 'Agent',
-  rulesText: 'The first Agent played each round has no cost and incurs no Entropy.',
+  rulesText: 'The first **Agent** played each round has no cost and incurs no Entropy.',
 }
 
 // ── Operator cards ────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ export const OPERATOR_CARDS: OperatorCardDef[] = [
     consume: [],
     produce: ['generic'],
     contributes: [c('pink', 'triangle')],
-    rulesText: 'A free chain starter. Costs nothing, produces one generic.',
+    rulesText: 'A free chain starter. Costs nothing, produces one **generic**.',
   },
   {
     id: 'TEST-OP-AGENT',
@@ -156,7 +156,7 @@ export const OPERATOR_CARDS: OperatorCardDef[] = [
     produce: ['attention'],
     contributes: [c('green', 'pentagon')],
     keywords: ['durable'],
-    rulesText: 'Durable — relays to the next round without feeding Entropy.',
+    rulesText: '**Durable** — relays to the next round without feeding Entropy.',
   },
   {
     id: 'TEST-OP-SETUP-PIPELINE',
@@ -167,7 +167,7 @@ export const OPERATOR_CARDS: OperatorCardDef[] = [
     produce: ['generic'],
     contributes: [c('green', 'circle')],
     keywords: ['setup'],
-    rulesText: 'Setup — scrap it on a failed eval to shed 5 Entropy.',
+    rulesText: '**Setup** — scrap it on a failed eval to shed 5 Entropy.',
   },
   {
     id: 'TEST-OP-GUARDRAIL',
@@ -178,7 +178,7 @@ export const OPERATOR_CARDS: OperatorCardDef[] = [
     produce: [],
     contributes: [c('pink', 'circle')],
     response: { kind: 'cleansePollution', n: 2 },
-    rulesText: 'Response: remove up to 2 injected contributions.',
+    rulesText: '**Response:** remove up to 2 injected contributions.',
   },
   {
     id: 'TEST-OP-PATCH',
@@ -189,7 +189,7 @@ export const OPERATOR_CARDS: OperatorCardDef[] = [
     produce: [],
     contributes: [c('pink', 'square')],
     response: { kind: 'restoreSubverted' },
-    rulesText: 'Response: restore one subverted card in the Context.',
+    rulesText: '**Response:** restore one subverted card in the Context.',
   },
   {
     id: 'TEST-OP-MODEL-FRONTIER',
@@ -199,7 +199,7 @@ export const OPERATOR_CARDS: OperatorCardDef[] = [
     consume: ['capital', 'capital', 'technology'],
     produce: [],
     contributes: [c('violet', 'square')],
-    rulesText: 'Upgrade: replaces your installed model. Grants {eye} and a generic each round.',
+    rulesText: '**Upgrade:** replaces your installed model. Grants **attention** and a **generic** each round.',
   },
   {
     id: 'TEST-OP-WORKFLOW-A',
@@ -379,7 +379,7 @@ export const FEATURE_CARDS: FeatureCardDef[] = [
     id: 'TEST-FEAT-CACHING',
     name: 'Prompt Caching',
     effect: { kind: 'grantPip', pip: 'technology' },
-    rulesText: 'Gain {gear} this round.',
+    rulesText: 'Gain **technology** this round.',
   },
   {
     id: 'TEST-FEAT-TRACING',
@@ -391,7 +391,7 @@ export const FEATURE_CARDS: FeatureCardDef[] = [
     id: 'TEST-FEAT-EVALS',
     name: 'Evals',
     effect: { kind: 'grantPip', pip: 'attention' },
-    rulesText: 'Gain {eye} this round.',
+    rulesText: 'Gain **attention** this round.',
   },
 ]
 
@@ -400,13 +400,13 @@ export const EQUIPMENT: EquipmentDef[] = [
     id: 'TEST-EQ-LOCAL-RIG',
     name: 'Local Rig',
     grants: ['technology'],
-    rulesText: 'Auto-pitches the top card of your deck each round; grants {gear}.',
+    rulesText: 'Auto-pitches the top card of your deck each round; grants **technology**.',
   },
   {
     id: 'TEST-EQ-CLOUD',
     name: 'Mastra Cloud',
     grants: ['capital'],
-    rulesText: 'Auto-pitches the top card of your deck each round; grants {coin}.',
+    rulesText: 'Auto-pitches the top card of your deck each round; grants **capital**.',
   },
 ]
 
@@ -421,7 +421,7 @@ export const MODELS: ModelDef[] = [
     id: 'TEST-MODEL-FRONTIER',
     name: 'Frontier Model',
     grants: ['attention', 'generic'],
-    rulesText: 'Grants {eye} and a generic each round.',
+    rulesText: 'Grants **attention** and a **generic** each round.',
   },
 ]
 

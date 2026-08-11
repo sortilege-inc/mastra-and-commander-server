@@ -8,6 +8,8 @@
 import * as React from 'react'
 import type { MCState } from './types'
 import { getEntropyCard, getFeatureCard, getOperatorCard } from './cards/registry'
+import { CardFace } from './CardFace'
+import { RulesText } from './RulesText'
 import { eligibleTargets } from './rules/entropyHelpers'
 import type { EntropyTarget } from './rules/entropyHelpers'
 import { scrappableCards } from './rules/phaseHelpers'
@@ -15,7 +17,7 @@ import { C, btn } from './theme'
 
 function Overlay({ title, subtitle, children }: {
   title: string
-  subtitle?: string
+  subtitle?: React.ReactNode
   children: React.ReactNode
 }): React.ReactElement {
   return (
@@ -58,9 +60,11 @@ export function FeaturePickOverlay({ G, onPick, onSkip }: {
               width: 170, padding: 10, borderRadius: 6,
               border: `1px solid ${C.border}`, background: C.panelAlt,
             }}>
-              <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{def.name}</div>
-              <div style={{ fontSize: '0.75rem', color: C.dim, margin: '4px 0 8px' }}>
-                {def.rulesText}
+              {/* No hover zoom inside an overlay — the preview would land on
+                  top of the very buttons you are trying to click. */}
+              <CardFace cardId={id} label={def.name} width={150} zoom={false} />
+              <div style={{ fontSize: '0.75rem', color: C.dim, margin: '6px 0 8px' }}>
+                <RulesText text={def.rulesText} />
               </div>
               <button style={btn()} onClick={() => onPick(id)}>Select</button>
             </div>
@@ -84,8 +88,10 @@ export function EntropyTargetOverlay({ G, onChoose, onAuto }: {
   const targets = eligibleTargets(G, def.effect)
 
   return (
-    <Overlay title={`Entropy: ${def.name}`} subtitle={def.rulesText}>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+    <Overlay title={`Entropy: ${def.name}`} subtitle={<RulesText text={def.rulesText} />}>
+      <div style={{ display: 'flex', gap: 14, marginBottom: 14, alignItems: 'flex-start' }}>
+        <CardFace cardId={def.id} label={def.name} width={130} zoom={false} />
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flex: 1 }}>
         {targets.map((target, i) => (
           <button
             key={i}
@@ -95,7 +101,8 @@ export function EntropyTargetOverlay({ G, onChoose, onAuto }: {
             {target.label}
           </button>
         ))}
-        {targets.length === 0 && <span style={{ color: C.dim }}>No legal targets.</span>}
+          {targets.length === 0 && <span style={{ color: C.dim }}>No legal targets.</span>}
+        </div>
       </div>
       <button style={btn()} onClick={onAuto}>Auto-resolve (leftmost)</button>
     </Overlay>

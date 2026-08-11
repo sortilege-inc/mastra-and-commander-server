@@ -11,6 +11,7 @@ import { getOperatorCard } from './cards/registry'
 import { slotContributions } from './rules/evalHelpers'
 import { describeCallTarget } from './rules/playMoves'
 import { C, COLOR_SWATCH, PIP_GLYPH, SHAPE_GLYPH, btn } from './theme'
+import { CardBack, CardFace } from './CardFace'
 
 function Pips({ counts }: { counts: PipCounts }): React.ReactElement | null {
   const parts: string[] = []
@@ -43,7 +44,8 @@ export function ContextRow({
           </div>
 
           <div style={{
-            display: 'flex', gap: 8, flexWrap: 'wrap', minHeight: 92,
+            display: 'flex', gap: 8, flexWrap: 'wrap', minHeight: 170,
+            alignItems: 'flex-start',
             padding: 8, background: C.panelAlt, border: `1px dashed ${C.border}`,
             borderRadius: 8,
           }}>
@@ -62,17 +64,20 @@ export function ContextRow({
               if (slot.faceDown && slot.calls) {
                 const contributions = slotContributions(G, slot)
                 return (
-                  <div key={slotIx} style={{
-                    width: 132, padding: 8, borderRadius: 6,
-                    border: `1px dashed ${C.warn}`,
-                    background: slot.subverted ? C.dangerBg : '#201c10',
-                    opacity: slot.subverted ? 0.75 : 1,
-                  }}>
-                    <div style={{ fontSize: '0.72rem', color: C.warn, marginBottom: 4 }}>
-                      ▾ face-down call
-                    </div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 4 }}>
-                      {describeCallTarget(G, slot.calls)}
+                  <div key={slotIx} style={{ width: 112 }}>
+                    {/* A card back, because that is literally what is on the
+                        table — the spent card's identity is concealed and
+                        irrelevant. What scores is the resource it invoked. */}
+                    <CardBack
+                      deck="operator"
+                      width={112}
+                      ring={slot.subverted ? C.danger : C.warn}
+                    />
+                    <div style={{
+                      fontSize: '0.72rem', fontWeight: 600, marginTop: 4,
+                      color: slot.subverted ? C.danger : C.warn,
+                    }}>
+                      ▾ {describeCallTarget(G, slot.calls)}
                     </div>
                     <div>
                       {slot.subverted ? (
@@ -83,9 +88,7 @@ export function ContextRow({
                         </span>
                       ))}
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: C.dim, marginTop: 4 }}>
-                      skipped for I/O
-                    </div>
+                    <div style={{ fontSize: '0.66rem', color: C.dim }}>skipped for I/O</div>
                   </div>
                 )
               }
@@ -94,38 +97,25 @@ export function ContextRow({
                 <div
                   key={slotIx}
                   onClick={() => { if (canRelay) onToggleRelay(chainIx, slotIx) }}
-                  style={{
-                    width: 132, padding: 8, borderRadius: 6,
-                    border: `1px solid ${slot.relayed ? C.accent : C.border}`,
-                    background: slot.subverted ? C.dangerBg : C.panel,
-                    opacity: slot.subverted ? 0.75 : 1,
-                    cursor: canRelay ? 'pointer' : 'default',
-                  }}
+                  title={canRelay ? 'Click to relay this card into the next round' : undefined}
+                  style={{ width: 112, cursor: canRelay ? 'pointer' : 'default' }}
                 >
-                  <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 4 }}>
-                    {def.name}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: C.dim, marginBottom: 4 }}>
-                    {def.traits.join(' · ')}
-                  </div>
-                  <div style={{ marginBottom: 4 }}>
-                    {slot.subverted ? (
-                      <span style={{ color: C.danger, fontSize: '0.72rem' }}>SUBVERTED</span>
-                    ) : (
-                      def.contributes.map((contrib, i) => (
-                        <span key={i} style={{ color: COLOR_SWATCH[contrib.color], marginRight: 3 }}>
-                          {SHAPE_GLYPH[contrib.shape]}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                  <div style={{ fontSize: '0.7rem' }}>
-                    <Pips counts={slot.outputsRemaining} />
+                  <CardFace
+                    cardId={slot.cardId}
+                    label={def.name}
+                    width={112}
+                    dimmed={slot.subverted}
+                    ring={slot.relayed ? C.accent : (slot.subverted ? C.danger : null)}
+                  />
+                  {/* Only the state the printed face can't show: what this card
+                      still has left to fund the next one, and its round-end fate. */}
+                  <div style={{ fontSize: '0.72rem', marginTop: 4 }}>
+                    {slot.subverted
+                      ? <span style={{ color: C.danger }}>SUBVERTED</span>
+                      : <Pips counts={slot.outputsRemaining} />}
                   </div>
                   {slot.relayed && (
-                    <div style={{ color: C.accent, fontSize: '0.68rem', marginTop: 3 }}>
-                      ↻ relay
-                    </div>
+                    <div style={{ color: C.accent, fontSize: '0.68rem' }}>↻ relay</div>
                   )}
                 </div>
               )

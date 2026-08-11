@@ -32,6 +32,7 @@ import {
 } from './GateOverlays'
 import type { EntropyTarget } from './rules/entropyHelpers'
 import { C, btn } from './theme'
+import { CardBack } from './CardFace'
 
 const PHASE_LABEL: Record<RoundPhase, string> = {
   reveal: '1 · Reveal',
@@ -167,7 +168,11 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
           </button>
         )}
         {substrate && (
-          <span style={{ color: C.warn, fontSize: '0.82rem', alignSelf: 'center' }}>
+          <span style={{
+            color: C.warn, fontSize: '0.82rem', alignSelf: 'center',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <CardBack deck="operator" width={30} ring={C.warn} />
             “{getOperatorCard(substrate).name}” staged as the face-down substrate —
             now click <strong>install</strong> on a Tool.
           </span>

@@ -8,6 +8,8 @@ import { RAG_CHAPTERS, CLAW_COMPLETE_COUNT } from './constants'
 import { getEvalCard, getFeatureCard, getOperatorCard } from './cards/registry'
 import { contextSize, contributionsOf, matchEval } from './rules/evalHelpers'
 import { C, COLOR_SWATCH, SHAPE_GLYPH, panel } from './theme'
+import { CardBack, CardFace } from './CardFace'
+import { RulesText } from './RulesText'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -32,9 +34,14 @@ export function SidePanels({ G }: { G: MCState }): React.ReactElement {
       <Section title="OBJECTIVE">
         {evalDef ? (
           <>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>{evalDef.name}</div>
-            <div style={{ fontSize: '0.8rem', color: C.dim, marginBottom: 6 }}>
-              {evalDef.rulesText}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
+              <CardFace cardId={evalDef.id} label={evalDef.name} width={96} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>{evalDef.name}</div>
+                <div style={{ fontSize: '0.78rem', color: C.dim }}>
+                  <RulesText text={evalDef.rulesText} />
+                </div>
+              </div>
             </div>
             <div style={{ fontSize: '0.78rem' }}>
               par {evalDef.par}
@@ -61,17 +68,35 @@ export function SidePanels({ G }: { G: MCState }): React.ReactElement {
         )}
       </Section>
 
-      {/* Entropy */}
+      {/* Entropy — the stack is drawn as an actual pile, because its height is
+          the thing the Operator is playing against all round. */}
       <Section title="ENTROPY">
-        <div style={{ fontSize: '0.85rem' }}>
-          stack <strong style={{ color: G.entropyStack.length > 0 ? C.danger : C.accent }}>
-            {G.entropyStack.length}
-          </strong>
-          {' · '}deck {G.entropyDeck.length}
-          {' · '}resolved {G.entropyResolved.length}
-        </div>
-        <div style={{ fontSize: '0.78rem', color: C.dim, marginTop: 4 }}>
-          fed this round: {G.entropyFedThisRound}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          {G.entropyStack.length > 0
+            ? (
+              <CardBack
+                deck="entropy"
+                width={58}
+                count={G.entropyStack.length}
+                ring={C.danger}
+                label={`stack ${G.entropyStack.length}`}
+              />
+            )
+            : (
+              <div style={{
+                width: 58, height: 79, borderRadius: 8, flexShrink: 0,
+                border: `1px dashed ${C.border}`, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                color: C.accent, fontSize: '0.7rem',
+              }}>
+                clear
+              </div>
+            )}
+          <div style={{ fontSize: '0.8rem', lineHeight: 1.6 }}>
+            <div>deck {G.entropyDeck.length}</div>
+            <div>resolved {G.entropyResolved.length}</div>
+            <div style={{ color: C.dim }}>fed this round: {G.entropyFedThisRound}</div>
+          </div>
         </div>
       </Section>
 
@@ -102,7 +127,13 @@ export function SidePanels({ G }: { G: MCState }): React.ReactElement {
               </span>
             )}
           </div>
-          <div>Claw {G.clawHand.length > 0 ? 'complete' : `${G.clawPile.length}/${CLAW_COMPLETE_COUNT}`}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>Claw {G.clawHand.length > 0 ? 'complete' : `${G.clawPile.length}/${CLAW_COMPLETE_COUNT}`}</span>
+            {/* The loader is a pile of face-down Operator cards. */}
+            {G.clawPile.length > 0 && (
+              <CardBack deck="operator" width={34} count={G.clawPile.length} />
+            )}
+          </div>
           <div>
             Contexts {G.contexts.length}
             <span style={{ color: C.dim }}>
@@ -112,11 +143,21 @@ export function SidePanels({ G }: { G: MCState }): React.ReactElement {
           </div>
           <div>
             Servers {G.servers.length}
-            {G.servers.length > 0 && (
-              <span style={{ color: C.dim }}>
-                {' '}({G.servers.map((s) => getOperatorCard(s.traitCardId).name).join(', ')})
-              </span>
-            )}
+            {/* Each server is a capability sitting ON a face-down substrate —
+                drawn that way, since the substrate is the attack surface. */}
+            <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+              {G.servers.map((server, ix) => (
+                <div key={ix} style={{ display: 'flex', alignItems: 'flex-start', gap: 3 }}>
+                  <CardBack deck="operator" width={30} ring={server.disabled ? C.danger : null} />
+                  <CardFace
+                    cardId={server.traitCardId}
+                    label={getOperatorCard(server.traitCardId).name}
+                    width={44}
+                    dimmed={server.disabled}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
           <div>
             Skills{' '}

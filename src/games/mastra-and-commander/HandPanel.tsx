@@ -8,13 +8,10 @@
 import * as React from 'react'
 import type { MCState } from './types'
 import { getCommander, getEquipment, getModel, getOperatorCard } from './cards/registry'
-import { C, COLOR_SWATCH, PIP_GLYPH, SHAPE_GLYPH, btn, panel } from './theme'
+import { C, PIP_GLYPH, btn, panel } from './theme'
+import { CardFace } from './CardFace'
 import { TRAIT_EVENT, TRAIT_MODEL, TRAIT_RESPONSE } from './constants'
-import type { Pip } from './constants'
 import type { CallTarget } from './types'
-
-const pipRow = (pips: Pip[]): string =>
-  pips.map((p) => PIP_GLYPH[p] ?? '?').join('') || '—'
 
 export function HandPanel({
   G, selectedPitches, callTargets, onTogglePitch, onPlay, onEvent, onResponse,
@@ -62,26 +59,25 @@ export function HandPanel({
           background: pitched ? '#2a2415' : C.panel,
         }}
       >
-        <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>{def.name}</div>
-        <div style={{ fontSize: '0.68rem', color: C.dim, marginBottom: 4 }}>
-          {def.traits.join(' · ')}{fromClaw ? ' · claw' : ''}
-          {def.ecosystem ? ` · ${def.ecosystem}` : ''}
-        </div>
-        <div style={{ fontSize: '0.72rem', marginBottom: 3 }}>
-          <span style={{ color: C.dim }}>cost </span>
-          <span style={{ color: C.warn }}>{pipRow(def.consume)}</span>
-          <span style={{ color: C.dim }}> → </span>
-          <span style={{ color: C.accent }}>{pipRow(def.produce)}</span>
-        </div>
-        <div style={{ marginBottom: 6 }}>
-          {def.contributes.map((contrib, i) => (
-            <span key={i} style={{ color: COLOR_SWATCH[contrib.color], marginRight: 3 }}>
-              {SHAPE_GLYPH[contrib.shape]}
-            </span>
-          ))}
+        {/* The printed face carries name, traits, cost, produce and
+            contributions, so none of that is repeated below — only the state
+            the card can't show (pitched, claw) and the actions. Hover to read
+            the rails and rules text at a legible size. */}
+        <CardFace
+          cardId={cardId}
+          label={def.name}
+          width={138}
+          ring={pitched ? C.warn : null}
+        />
+        <div style={{
+          fontSize: '0.68rem', color: pitched ? C.warn : C.dim,
+          margin: '4px 0 6px', minHeight: 14,
+        }}>
+          {pitched ? 'marked to pitch' : ''}
+          {fromClaw ? (pitched ? ' · claw' : 'claw') : ''}
           {(def.keywords ?? []).length > 0 && (
-            <span style={{ color: C.accent, fontSize: '0.68rem', marginLeft: 4 }}>
-              {(def.keywords ?? []).join(' ')}
+            <span style={{ color: C.accent }}>
+              {(pitched || fromClaw ? ' · ' : '') + (def.keywords ?? []).join(' ')}
             </span>
           )}
         </div>
@@ -155,12 +151,18 @@ export function HandPanel({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {/* Resource rail */}
-      <div style={{ ...panel, display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ ...panel, display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div>
-          <div style={{ fontSize: '0.7rem', color: C.dim }}>COMMANDER</div>
-          <div style={{ fontSize: '0.85rem' }}>{commander.name}</div>
+          <div style={{ fontSize: '0.7rem', color: C.dim, marginBottom: 4 }}>COMMANDER</div>
+          <CardFace
+            cardId={G.commanderId}
+            label={commander.name}
+            width={84}
+            dimmed={G.commanderFreeAgentUsed}
+            ring={G.commanderFreeAgentUsed ? null : C.accent}
+          />
           <div style={{
-            fontSize: '0.7rem',
+            fontSize: '0.68rem', marginTop: 3, maxWidth: 84,
             color: G.commanderFreeAgentUsed ? C.dim : C.accent,
           }}>
             {G.commanderFreeAgentUsed
@@ -169,13 +171,26 @@ export function HandPanel({
           </div>
         </div>
         <div>
-          <div style={{ fontSize: '0.7rem', color: C.dim }}>MODEL</div>
-          <div style={{ fontSize: '0.85rem' }}>{model.name}</div>
+          <div style={{ fontSize: '0.7rem', color: C.dim, marginBottom: 4 }}>MODEL</div>
+          <CardFace cardId={G.installedModelId} label={model.name} width={84} />
         </div>
         <div>
-          <div style={{ fontSize: '0.7rem', color: C.dim }}>LOADOUT</div>
-          <div style={{ fontSize: '0.85rem' }}>
-            {G.loadout.map((id) => getEquipment(id).name).join(' · ')}
+          <div style={{ fontSize: '0.7rem', color: C.dim, marginBottom: 4 }}>LOADOUT</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {G.loadout.map((id) => {
+              // A Skill attached to a loadout slot rides with it (Durable).
+              const attached = G.skillAttachments.find((a) => a.equipmentId === id)
+              return (
+                <div key={id}>
+                  <CardFace cardId={id} label={getEquipment(id).name} width={84} />
+                  {attached && (
+                    <div style={{ fontSize: '0.62rem', color: C.accent, maxWidth: 84, marginTop: 2 }}>
+                      + {getOperatorCard(attached.skillCardId).name}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
         <div>
