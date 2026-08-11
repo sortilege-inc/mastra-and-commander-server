@@ -1,14 +1,16 @@
 /**
- * The Operator's hand, the completed Claw's second hand, and the resource rail
- * (framework, equipment, model, round pool).
+ * The Operator's hand and the completed Claw's second hand.
+ *
+ * The permanent apparatus (framework, model, loadout, servers, claw, RAG) lives
+ * in EnginePanel — this file is only the cards you can act with right now.
  *
  * Pitch selection: click a card's ⊕ to mark it as a pitch, then play another
  * card — the marked cards are passed as the move's `pitchIds`.
  */
 import * as React from 'react'
 import type { MCState } from './types'
-import { getFramework, getEquipment, getModel, getOperatorCard } from './cards/registry'
-import { C, PIP_GLYPH, btn, panel } from './theme'
+import { getEquipment, getOperatorCard } from './cards/registry'
+import { C, btn } from './theme'
 import { CardFace } from './CardFace'
 import { TRAIT_EVENT, TRAIT_MODEL, TRAIT_RESPONSE } from './constants'
 import type { CallTarget } from './types'
@@ -33,8 +35,6 @@ export function HandPanel({
   /** Stage this card as the face-down substrate for the next install. */
   onStageSubstrate: (cardId: string) => void
 }): React.ReactElement {
-  const framework = getFramework(G.frameworkId)
-  const model = getModel(G.installedModelId)
   const inPlay = G.phase === 'play'
   const inResponse = G.phase === 'response'
   /** Loadout slots with no Skill on them yet. */
@@ -150,59 +150,6 @@ export function HandPanel({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* Resource rail */}
-      <div style={{ ...panel, display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ fontSize: '0.7rem', color: C.dim, marginBottom: 4 }}>FRAMEWORK</div>
-          <CardFace
-            cardId={G.frameworkId}
-            label={framework.name}
-            width={84}
-            dimmed={G.frameworkFreeAgentUsed}
-            ring={G.frameworkFreeAgentUsed ? null : C.accent}
-          />
-          <div style={{
-            fontSize: '0.68rem', marginTop: 3, maxWidth: 84,
-            color: G.frameworkFreeAgentUsed ? C.dim : C.accent,
-          }}>
-            {G.frameworkFreeAgentUsed
-              ? 'free Agent used'
-              : `free ${framework.freeTrait} available`}
-          </div>
-        </div>
-        <div>
-          <div style={{ fontSize: '0.7rem', color: C.dim, marginBottom: 4 }}>MODEL</div>
-          <CardFace cardId={G.installedModelId} label={model.name} width={84} />
-        </div>
-        <div>
-          <div style={{ fontSize: '0.7rem', color: C.dim, marginBottom: 4 }}>LOADOUT</div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {G.loadout.map((id) => {
-              // A Skill attached to a loadout slot rides with it (Durable).
-              const attached = G.skillAttachments.find((a) => a.equipmentId === id)
-              return (
-                <div key={id}>
-                  <CardFace cardId={id} label={getEquipment(id).name} width={84} />
-                  {attached && (
-                    <div style={{ fontSize: '0.62rem', color: C.accent, maxWidth: 84, marginTop: 2 }}>
-                      + {getOperatorCard(attached.skillCardId).name}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-        <div>
-          <div style={{ fontSize: '0.7rem', color: C.dim }}>ROUND POOL</div>
-          <div style={{ fontSize: '0.95rem', color: C.warn, letterSpacing: 2 }}>
-            {(['capital', 'attention', 'technology', 'generic'] as const)
-              .flatMap((pip) => Array(G.roundPool[pip]).fill(PIP_GLYPH[pip]))
-              .join('') || '—'}
-          </div>
-        </div>
-      </div>
-
       {/* Hand */}
       <div>
         <div style={{ fontSize: '0.8rem', color: C.dim, marginBottom: 4 }}>

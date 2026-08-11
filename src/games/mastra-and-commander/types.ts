@@ -27,7 +27,7 @@ import type { Contribution, PipCounts, RoundPhase } from './constants'
  * and the called resource's Contribution is what lands in the Context.
  */
 export type CallTarget =
-  | { kind: 'server'; index: number }
+  | { kind: 'server'; serverId: string }
   | { kind: 'skill'; equipmentId: string }
   | { kind: 'rag' }
 
@@ -102,6 +102,15 @@ export interface ContextChain {
 /** An installed server (design §4): a face-down substrate card with a
  *  capability trait card played onto it. The substrate is the attack surface. */
 export interface ServerInstall {
+  /**
+   * Stable identity, assigned at install and never reused.
+   *
+   * NOT the array index: Entropy's attackServer removes a server outright, and
+   * anything holding an index (a face-down CALL already in the Context) would
+   * then dangle or, worse, silently slide onto the next server along. Ids are
+   * minted from `nextServerSeq` so they stay deterministic for replay.
+   */
+  id: string
   /** Face-down — hidden from the Entropy seat by playerView. */
   substrateCardId: string
   /** The MCP / Skill / Tool card providing the capability. */
@@ -154,6 +163,9 @@ export interface MCState {
   /** Installed MCP servers — a Tool over a face-down substrate. Persist for
    *  the whole match; reached by a face-down CALL. */
   servers: ServerInstall[]
+  /** Monotonic counter behind ServerInstall.id. Never decremented, so an id is
+   *  never reused even after its server is destroyed. */
+  nextServerSeq: number
   /** Skills attached to loadout items. Persist; reached by a CALL. */
   skillAttachments: SkillAttachment[]
   /** Set once the framework's free Agent has been used this round. */

@@ -16,16 +16,18 @@ import type { EntropyEffect } from '../cards/types'
 import { getEntropyCard, getOperatorCard } from '../cards/registry'
 import { feedEntropy, log } from './playHelpers'
 
-/** A target the Entropy player (or the solo auto-resolver) may choose. */
-export interface EntropyTarget {
-  kind: 'contextSlot' | 'server'
-  /** Chain index for contextSlot; unused for server. */
-  chainIx?: number
-  /** Slot index within the chain, or index into G.servers. */
-  index: number
-  /** Display label for the overlay. */
-  label: string
-}
+/**
+ * A target the Entropy player (or the solo auto-resolver) may choose.
+ *
+ * A discriminated union rather than one shape with optional fields: a Context
+ * slot is addressed positionally (chain + slot), but a server is addressed by
+ * its STABLE id, because destroying one shifts every later index. Keeping both
+ * in a single `index` field is what let those two addressing schemes get
+ * confused in the first place.
+ */
+export type EntropyTarget =
+  | { kind: 'contextSlot'; chainIx: number; index: number; label: string }
+  | { kind: 'server'; serverId: string; label: string }
 
 /** Does this effect need the Entropy seat to pick something? */
 export function isTargeted(effect: EntropyEffect): boolean {
@@ -56,11 +58,11 @@ export function eligibleTargets(G: MCState, effect: EntropyEffect): EntropyTarge
   }
 
   if (effect.kind === 'attackServer') {
-    G.servers.forEach((server, index) => {
+    G.servers.forEach((server) => {
       if (server.disabled) return
       targets.push({
         kind: 'server',
-        index,
+        serverId: server.id,
         label: getOperatorCard(server.traitCardId).name,
       })
     })
@@ -131,14 +133,17 @@ export function applyEntropyEffect(
         log(G, 'Server attack had no legal target.')
         break
       }
-      const server = G.servers[target.index]
+      const index = G.servers.findIndex((entry) => entry.id === target.serverId)
+      const server = G.servers[index]
       if (!server) {
         log(G, 'Server attack target vanished.')
         break
       }
-      // Substrate and capability both fall out of play.
+      // Substrate and capability both fall out of play. Any face-down CALL
+      // still pointing here goes dead rather than sliding onto a neighbour —
+      // that is what the stable id buys.
       G.operatorDiscard.push(server.substrateCardId, server.traitCardId)
-      G.servers.splice(target.index, 1)
+      G.servers.splice(index, 1)
       log(G, `destroyed the server hosting ${target.label}`)
       break
     }

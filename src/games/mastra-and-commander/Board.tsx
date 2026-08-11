@@ -25,6 +25,7 @@ import type { CallTarget } from './types'
 import { getOperatorCard } from './cards/registry'
 import { useGameMode } from '../../framework/ModeContext'
 import { ContextRow } from './ContextRow'
+import { EnginePanel } from './EnginePanel'
 import { HandPanel } from './HandPanel'
 import { SidePanels } from './SidePanels'
 import {
@@ -93,8 +94,8 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
 
   /** Everything currently callable with a face-down card. */
   const callTargets: Array<{ target: CallTarget; label: string }> = [
-    ...G.servers.map((server, index) => ({
-      target: { kind: 'server' as const, index },
+    ...G.servers.map((server) => ({
+      target: { kind: 'server' as const, serverId: server.id },
       label: `${getOperatorCard(server.traitCardId).name} (server)`,
     })),
     ...G.skillAttachments.map((attachment) => ({
@@ -154,22 +155,6 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
           && G.contexts.filter((c) => c.parentChainIx === null).length < G.processLimit && (
           <button style={btn()} onClick={() => moves.openProcess()}>Open Process</button>
         )}
-        {G.phase === 'play' && nextRagChapter && (
-          <button
-            style={btn()}
-            onClick={() => {
-              // Upsert and Rerank consume a card from hand; the rest don't.
-              const card = ragNeedsCard ? (pitches[0] ?? null) : null
-              moves.advanceRag(ragNeedsCard ? pitches.slice(1) : pitches, card)
-              clearPitches()
-            }}
-            title={ragNeedsCard
-              ? `Mark the payload card first, then any pitches. Costs ${nextRagChapter.cost}.`
-              : `Costs ${nextRagChapter.cost}.`}
-          >
-            RAG: {nextRagChapter.name} ({nextRagChapter.cost})
-          </button>
-        )}
         {G.phase === 'entropy' && G.entropyStack.length > 0 && mode !== 'vs-ai' && (
           <button
             style={{ ...btn(), borderColor: C.danger, color: C.danger, background: C.dangerBg }}
@@ -208,6 +193,25 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
       {/* Main columns */}
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 640px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <EnginePanel
+            G={G}
+            ragButton={G.phase === 'play' && nextRagChapter ? (
+              <button
+                style={btn()}
+                onClick={() => {
+                  // Upsert and Rerank consume a card from hand; the rest don't.
+                  const card = ragNeedsCard ? (pitches[0] ?? null) : null
+                  moves.advanceRag(ragNeedsCard ? pitches.slice(1) : pitches, card)
+                  clearPitches()
+                }}
+                title={ragNeedsCard
+                  ? `Mark the payload card first, then any pitches. Costs ${nextRagChapter.cost}.`
+                  : `Costs ${nextRagChapter.cost}.`}
+              >
+                {nextRagChapter.name} ({nextRagChapter.cost})
+              </button>
+            ) : undefined}
+          />
           <ContextRow
             G={G}
             canRelay={G.phase === 'evalCheck'}

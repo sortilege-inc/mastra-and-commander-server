@@ -379,19 +379,18 @@ describe('Tool and Skill placement', () => {
   it('calls an installed resource face-down for free', () => {
     const G = emptyGameState()
     G.phase = 'play'
-    G.servers = [{
-      substrateCardId: 'TEST-OP-SCRATCHPAD',
+    G.servers = [{ id: 'srv-1', substrateCardId: 'TEST-OP-SCRATCHPAD',
       traitCardId: 'TEST-OP-MCP-FILESYSTEM',
       disabled: false,
     }]
     G.operatorHand = ['TEST-OP-AGENT']
     G.entropyDeck = Array(3).fill('TEST-EN-STATIC')
 
-    callInstalled(mv(G), 0, 'TEST-OP-AGENT', { kind: 'server', index: 0 })
+    callInstalled(mv(G), 0, 'TEST-OP-AGENT', { kind: 'server', serverId: 'srv-1' })
 
     const slot = G.contexts[0]!.slots[0]!
     expect(slot.faceDown).toBe(true)
-    expect(slot.calls).toEqual({ kind: 'server', index: 0 })
+    expect(slot.calls).toEqual({ kind: 'server', serverId: 'srv-1' })
     // Free: the Entropy was paid at install time.
     expect(G.entropyStack).toHaveLength(0)
   })
@@ -400,15 +399,14 @@ describe('Tool and Skill placement', () => {
     const G = emptyGameState()
     G.phase = 'play'
     G.operatorHand = ['TEST-OP-AGENT']
-    expect(callInstalled(mv(G), 0, 'TEST-OP-AGENT', { kind: 'server', index: 0 }))
+    expect(callInstalled(mv(G), 0, 'TEST-OP-AGENT', { kind: 'server', serverId: 'srv-1' }))
       .toBeDefined()
   })
 
   it('skips face-down slots for produce/consume', () => {
     const G = emptyGameState()
     G.phase = 'play'
-    G.servers = [{
-      substrateCardId: 'TEST-OP-SCRATCHPAD',
+    G.servers = [{ id: 'srv-1', substrateCardId: 'TEST-OP-SCRATCHPAD',
       traitCardId: 'TEST-OP-MCP-FILESYSTEM',
       disabled: false,
     }]
@@ -416,7 +414,7 @@ describe('Tool and Skill placement', () => {
     // cost the Scratchpad's output should still be able to pay.
     G.operatorHand = ['TEST-OP-SCRATCHPAD', 'TEST-OP-AGENT', 'TEST-OP-WORKFLOW-A']
     playToContext(mv(G), 0, 'TEST-OP-SCRATCHPAD', [])
-    callInstalled(mv(G), 0, 'TEST-OP-AGENT', { kind: 'server', index: 0 })
+    callInstalled(mv(G), 0, 'TEST-OP-AGENT', { kind: 'server', serverId: 'srv-1' })
     playToContext(mv(G), 0, 'TEST-OP-WORKFLOW-A', [])
 
     expect(G.contexts[0]!.slots).toHaveLength(3)

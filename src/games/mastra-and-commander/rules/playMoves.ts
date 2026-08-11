@@ -198,7 +198,7 @@ export function callInstalled(
 export function callTargetExists(G: MCState, target: CallTarget): boolean {
   switch (target.kind) {
     case 'server': {
-      const server = G.servers[target.index]
+      const server = findServer(G, target.serverId)
       return !!server && !server.disabled
     }
     case 'skill':
@@ -208,10 +208,20 @@ export function callTargetExists(G: MCState, target: CallTarget): boolean {
   }
 }
 
+/** Look up an installed server by its stable id. */
+export function findServer(G: MCState, serverId: string) {
+  return G.servers.find((server) => server.id === serverId)
+}
+
 export function describeCallTarget(G: MCState, target: CallTarget): string {
   switch (target.kind) {
-    case 'server':
-      return getOperatorCard(G.servers[target.index]!.traitCardId).name
+    case 'server': {
+      // Total by design: Entropy can destroy a server out from under a call
+      // that is already face-down in the Context, and the board still has to
+      // render that slot.
+      const server = findServer(G, target.serverId)
+      return server ? getOperatorCard(server.traitCardId).name : 'a destroyed server'
+    }
     case 'skill': {
       const attachment = G.skillAttachments.find((a) => a.equipmentId === target.equipmentId)
       return attachment ? getOperatorCard(attachment.skillCardId).name : 'a Skill'
@@ -308,7 +318,13 @@ export function installServer(
 
   removeFromHands(G, substrateCardId)
   removeFromHands(G, traitCardId)
-  G.servers.push({ substrateCardId, traitCardId, disabled: false })
+  G.servers.push({
+    id: `srv-${G.nextServerSeq}`,
+    substrateCardId,
+    traitCardId,
+    disabled: false,
+  })
+  G.nextServerSeq += 1
   log(G, `installed ${traitDef.name} as an MCP server (Durable, persists)`)
   feedEntropy(G, TOOL_SERVER_ENTROPY, `installed ${traitDef.name}`)
   refillHand(G, `installed ${traitDef.name}`)

@@ -44,8 +44,7 @@ describe('playerView — Entropy seat', () => {
 
   it('hides the face-down server substrate but shows the capability', () => {
     const G = emptyGameState()
-    G.servers = [{
-      substrateCardId: 'TEST-OP-SCRATCHPAD',
+    G.servers = [{ id: 'srv-1', substrateCardId: 'TEST-OP-SCRATCHPAD',
       traitCardId: 'TEST-OP-MCP-FILESYSTEM',
       disabled: false,
     }]

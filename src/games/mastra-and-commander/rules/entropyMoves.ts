@@ -73,9 +73,19 @@ export function chooseEntropyTarget({ G, playerID, random }: MoveCtx, target: En
 
   const def = getEntropyCard(gate.entropyCardId)
   const legal = eligibleTargets(G, def.effect)
-  const chosen = legal.find(
-    (t) => t.kind === target.kind && t.index === target.index && t.chainIx === target.chainIx,
-  )
+  // Match on each kind's own address: a slot by position, a server by its
+  // stable id. Re-deriving from eligibleTargets also revalidates the choice,
+  // so a target destroyed since the gate opened is rejected rather than applied.
+  const chosen = legal.find((t) => {
+    if (t.kind !== target.kind) return false
+    if (t.kind === 'server' && target.kind === 'server') {
+      return t.serverId === target.serverId
+    }
+    if (t.kind === 'contextSlot' && target.kind === 'contextSlot') {
+      return t.index === target.index && t.chainIx === target.chainIx
+    }
+    return false
+  })
   if (!chosen) return INVALID_MOVE
 
   applyEntropyEffect(G, def.effect, chosen, randomIndexFrom(random))

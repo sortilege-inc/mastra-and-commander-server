@@ -55,6 +55,7 @@ export function buildInitialState(random: RandomAPI): MCState {
     installedModelId: STARTING_MODEL_ID,
     roundPool: zeroPips(),
     servers: [],
+    nextServerSeq: 1,
     skillAttachments: [],
     frameworkFreeAgentUsed: false,
 

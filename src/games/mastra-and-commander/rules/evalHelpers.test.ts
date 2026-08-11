@@ -145,13 +145,12 @@ describe('contributionsOf', () => {
 
   it('scores a called server as the installed Tool, not the face-down card', () => {
     const G = emptyGameState()
-    G.servers = [{
-      substrateCardId: 'TEST-OP-SCRATCHPAD',
+    G.servers = [{ id: 'srv-1', substrateCardId: 'TEST-OP-SCRATCHPAD',
       traitCardId: 'TEST-OP-TOOL-WEBSEARCH', // amber circle
       disabled: false,
     }]
     // The face-down card is a Durable Agent (green pentagon) — irrelevant.
-    placeCall(G, 'TEST-OP-DURABLE-AGENT', { kind: 'server', index: 0 })
+    placeCall(G, 'TEST-OP-DURABLE-AGENT', { kind: 'server', serverId: 'srv-1' })
     expect(contributionsOf(G)).toEqual([c('amber', 'circle')])
   })
 

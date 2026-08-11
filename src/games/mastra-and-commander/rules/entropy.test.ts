@@ -146,8 +146,7 @@ describe('wrench vector — Goal-hijack', () => {
 describe('server attacks', () => {
   it('destroys the server and discards both its cards', () => {
     const G = emptyGameState()
-    G.servers = [{
-      substrateCardId: 'TEST-OP-SCRATCHPAD',
+    G.servers = [{ id: 'srv-1', substrateCardId: 'TEST-OP-SCRATCHPAD',
       traitCardId: 'TEST-OP-TOOL-WEBSEARCH',
       disabled: false,
     }]

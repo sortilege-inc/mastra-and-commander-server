@@ -1,11 +1,14 @@
 /**
- * Side panels: the current objective, the Entropy stack, the subsystems
- * (RAG / servers / claw / features), the round record, and the log.
+ * Side panels: the current objective, the Entropy stack, this round's context
+ * and feature state, the match record, and the log.
+ *
+ * The persistent apparatus (framework / model / loadout / servers / claw / RAG)
+ * is NOT here — it lives in EnginePanel across the top, where it has room for
+ * actual cards.
  */
 import * as React from 'react'
 import type { MCState } from './types'
-import { RAG_CHAPTERS, CLAW_COMPLETE_COUNT } from './constants'
-import { getEvalCard, getFeatureCard, getOperatorCard } from './cards/registry'
+import { getEvalCard, getFeatureCard } from './cards/registry'
 import { contextSize, contributionsOf, matchEval } from './rules/evalHelpers'
 import { C, COLOR_SWATCH, SHAPE_GLYPH, panel } from './theme'
 import { CardBack, CardFace } from './CardFace'
@@ -100,71 +103,16 @@ export function SidePanels({ G }: { G: MCState }): React.ReactElement {
         </div>
       </Section>
 
-      {/* Subsystems */}
-      <Section title="SUBSYSTEMS">
+      {/* Contexts + Features. The apparatus itself (servers / claw / RAG)
+          now lives in the engine row, where it gets real cards. */}
+      <Section title="THIS ROUND">
         <div style={{ fontSize: '0.8rem', lineHeight: 1.7 }}>
-          <div>
-            RAG{' '}
-            {RAG_CHAPTERS.map((chapter, ix) => (
-              <span
-                key={chapter.key}
-                style={{
-                  color: ix < G.rag.chaptersComplete ? C.accent : C.dim,
-                  marginRight: 5,
-                }}
-                title={`${chapter.name} — costs ${chapter.cost}`}
-              >
-                {ix < G.rag.chaptersComplete ? '●' : '○'}{chapter.name}
-              </span>
-            ))}
-            {G.rag.contribution.length > 0 && (
-              <span style={{ marginLeft: 4 }}>
-                → {G.rag.contribution.map((contrib, i) => (
-                  <span key={i} style={{ color: COLOR_SWATCH[contrib.color] }}>
-                    {SHAPE_GLYPH[contrib.shape]}
-                  </span>
-                ))}
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>Claw {G.clawHand.length > 0 ? 'complete' : `${G.clawPile.length}/${CLAW_COMPLETE_COUNT}`}</span>
-            {/* The loader is a pile of face-down Operator cards. */}
-            {G.clawPile.length > 0 && (
-              <CardBack deck="operator" width={34} count={G.clawPile.length} />
-            )}
-          </div>
           <div>
             Contexts {G.contexts.length}
             <span style={{ color: C.dim }}>
               {' '}(ceiling {G.contexts[0]?.ceiling ?? '—'}; {G.processLimit} process
               {G.processLimit === 1 ? '' : 'es'})
             </span>
-          </div>
-          <div>
-            Servers {G.servers.length}
-            {/* Each server is a capability sitting ON a face-down substrate —
-                drawn that way, since the substrate is the attack surface. */}
-            <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
-              {G.servers.map((server, ix) => (
-                <div key={ix} style={{ display: 'flex', alignItems: 'flex-start', gap: 3 }}>
-                  <CardBack deck="operator" width={30} ring={server.disabled ? C.danger : null} />
-                  <CardFace
-                    cardId={server.traitCardId}
-                    label={getOperatorCard(server.traitCardId).name}
-                    width={44}
-                    dimmed={server.disabled}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-          <div>
-            Skills{' '}
-            {G.skillAttachments.length > 0
-              ? G.skillAttachments.map((a) =>
-                `${getOperatorCard(a.skillCardId).name}→${a.equipmentId.replace('TEST-EQ-', '')}`).join(', ')
-              : <span style={{ color: C.dim }}>none attached</span>}
           </div>
           <div>
             Features{' '}

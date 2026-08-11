@@ -29,7 +29,10 @@ export function slotContributions(G: MCState, slot: ContextSlot): Contribution[]
   if (slot.calls) {
     switch (slot.calls.kind) {
       case 'server': {
-        const server = G.servers[slot.calls.index]
+        // A destroyed or disabled server scores nothing — losing the surface
+        // is meant to cost you the call.
+        const { serverId } = slot.calls
+        const server = G.servers.find((entry) => entry.id === serverId)
         if (!server || server.disabled) return []
         return getOperatorCard(server.traitCardId).contributes
       }
