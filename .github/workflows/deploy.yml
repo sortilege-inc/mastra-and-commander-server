@@ -1,0 +1,77 @@
+# Build the app and publish it to GitHub Pages.
+#
+# Pages must NOT be set to "Deploy from a branch" — serving the repo root hands
+# the browser the dev index.html, which asks for /src/main.tsx, and Pages
+# serves raw .tsx as application/octet-stream (the browser then refuses it as a
+# module script). Set Settings -> Pages -> Source to "GitHub Actions" so this
+# workflow's built `dist/` is what gets served.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Lets you re-publish from the Actions tab without a commit.
+  workflow_dispatch:
+
+# GITHUB_TOKEN needs these to publish a Pages artifact.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it mid-publish, but only
+# queue one follow-up.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The gates, so a broken build can't reach the site.
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Build
+        # No BASE_PATH: this site is served from the root of the custom domain
+        # in CNAME (mastra.sortilege.online), so assets belong at "/". A project
+        # site on github.io would instead need
+        #   BASE_PATH: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - name: Carry the custom domain into the artifact
+        # `base` above assumes the custom domain, so the artifact must actually
+        # claim it. Only the built output is published — a CNAME sitting in the
+        # repo root is never served.
+        run: |
+          if [ ! -f CNAME ]; then
+            echo "::error::CNAME is missing, but the build assumes a root-served custom domain."
+            exit 1
+          fi
+          cp CNAME dist/CNAME
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

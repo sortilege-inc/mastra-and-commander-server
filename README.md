@@ -132,6 +132,40 @@ never reaches `setup()`). In solo, `Board.tsx` auto-dispatches the Entropy
 seat's moves, auto-targeting the leftmost eligible target; in hotseat the
 Entropy player chooses via the overlay. Both drive the *same* moves.
 
+## Deploying to GitHub Pages
+
+`.github/workflows/deploy.yml` builds and publishes on every push to `main`.
+**Set Settings → Pages → Source to "GitHub Actions"**, not "Deploy from a
+branch".
+
+That setting is the whole trick. Serving a branch publishes the repo *root*, so
+visitors get the dev `index.html`, which asks for `/src/main.tsx` — and Pages
+serves raw `.tsx` as `application/octet-stream`, which the browser rejects:
+
+```
+Failed to load module script: Expected a JavaScript-or-Wasm module script
+but the server responded with a MIME type of "application/octet-stream".
+```
+
+The published artifact must be the built `dist/`, never the source tree.
+
+**Custom domain.** `CNAME` pins the site to `mastra.sortilege.online`, which
+serves from the domain *root*, so the build keeps the default base of `/` and
+the workflow copies `CNAME` into `dist/`. Only the artifact is published — a
+`CNAME` left in the repo root alone is never served.
+
+**Without a custom domain**, a project site lives at
+`https://<org>.github.io/<repo>/` and the asset URLs need that prefix, or every
+`/assets/...` request 404s. Drop the `CNAME` and build with:
+
+```bash
+BASE_PATH=/mastra-and-commander-server/ npm run build
+```
+
+Card art resolves through `import.meta.env.BASE_URL`, so it follows `BASE_PATH`
+automatically — hard-coded absolute `/cards/...` or `/assets/...` paths would
+break under a subpath.
+
 ## Card art
 
 The board renders the **real printed faces** — the Squib/Ice-Chrome renders from
