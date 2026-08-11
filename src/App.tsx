@@ -28,7 +28,7 @@ import { Client } from 'boardgame.io/react'
 import { GameSelect } from './framework/GameSelect'
 import { DeckImport } from './framework/DeckImport'
 import { SecondDeckPrompt } from './framework/SecondDeckPrompt'
-import { findGame } from './framework/registry'
+import { autoStartChoice, findGame } from './framework/registry'
 import { loadGameChoice, saveGameChoice, clearGameChoice, shouldRecordTranscript } from './framework/storage'
 import type { GameMode } from './framework/storage'
 import { GameModeProvider } from './framework/ModeContext'
@@ -58,7 +58,15 @@ type DeckFlow =
   | { kind: 'ready'; envelopes: DeckExport[] }
 
 export function App(): React.ReactElement {
-  const [choice, setChoice] = React.useState<ActiveChoice | null>(loadGameChoice)
+  // A visitor with no stored preference drops straight into the registry's
+  // auto-start game (see framework/registry.ts) instead of the picker. A stored
+  // choice still wins, so someone who deliberately switched games keeps it.
+  //
+  // This initializer runs once per mount, so "Switch game" — which clears the
+  // choice — reaches the picker rather than being re-filled by auto-start.
+  const [choice, setChoice] = React.useState<ActiveChoice | null>(
+    () => loadGameChoice() ?? autoStartChoice(),
+  )
   const [deckFlow, setDeckFlow] = React.useState<DeckFlow>({ kind: 'collect-first' })
   const [preload, setPreload] = React.useState<PreloadReport | 'loading' | null>(null)
   /** B3: when a SavedGame is loaded via the LoadGameButton, hold it
@@ -254,6 +262,8 @@ export function App(): React.ReactElement {
   }, [registration, loadedSnapshot])
 
   // ── State 1: no game chosen ──────────────────────────────────────
+  // With auto-start on, this is reached only when the user asked for the
+  // picker; their pick is saved, so it survives the next visit.
   if (!choice) {
     return (
       <GameSelect

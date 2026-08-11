@@ -24,6 +24,7 @@ import type { RoundPhase } from './constants'
 import type { CallTarget } from './types'
 import { getOperatorCard } from './cards/registry'
 import { useGameMode } from '../../framework/ModeContext'
+import { useSwitchGame } from '../../framework/SwitchGameContext'
 import { ContextRow } from './ContextRow'
 import { EnginePanel } from './EnginePanel'
 import { HandPanel } from './HandPanel'
@@ -46,6 +47,7 @@ const PHASE_LABEL: Record<RoundPhase, string> = {
 export function Board(props: BoardProps<MCState>): React.ReactElement {
   const { G, ctx, moves } = props
   const mode = useGameMode()
+  const switchGame = useSwitchGame()
   const [pitches, setPitches] = React.useState<string[]>([])
   /** Which hand card is staged as a server substrate for the next install. */
   const [substrate, setSubstrate] = React.useState<string | null>(null)
@@ -119,6 +121,18 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
         {mode === 'vs-ai' && (
           <span style={{ color: C.accent, fontSize: '0.8rem' }}>solo — Entropy is automated</span>
         )}
+        {/* The site drops you straight into a hotseat game, so this is the only
+            route back to the picker. Without it, auto-start is a one-way door. */}
+        <button
+          onClick={switchGame}
+          style={{
+            marginLeft: 'auto', background: 'none', border: 'none', padding: 0,
+            color: C.dim, fontSize: '0.78rem', cursor: 'pointer',
+            textDecoration: 'underline', fontFamily: 'inherit',
+          }}
+        >
+          Switch game
+        </button>
       </div>
 
       {/* Phase stepper */}
