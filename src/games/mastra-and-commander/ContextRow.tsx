@@ -23,21 +23,52 @@ function Pips({ counts }: { counts: PipCounts }): React.ReactElement | null {
 }
 
 export function ContextRow({
-  G, canRelay, onToggleRelay, onCloseProcess,
+  G, canRelay, targetChainIx, onSelectChain, onToggleRelay, onCloseProcess,
 }: {
   G: MCState
   canRelay: boolean
+  /** Which Process a played card lands in. */
+  targetChainIx: number
+  onSelectChain: (chainIx: number) => void
   onToggleRelay: (chainIx: number, slotIx: number) => void
   onCloseProcess: (chainIx: number) => void
 }): React.ReactElement {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {G.contexts.map((chain, chainIx) => (
-        <div key={chainIx}>
+      {G.contexts.map((chain, chainIx) => {
+        // With Parallelism or a Subagent open, plays have to know WHICH window
+        // they land in. Selecting the target is done by clicking the Process
+        // itself, so the choice lives next to the thing being chosen.
+        const selectable = G.phase === 'play' && !chain.closed && G.contexts.length > 1
+        const isTarget = chainIx === targetChainIx && !chain.closed
+        const parent = chain.parentChainIx
+
+        return (
+        <div key={chainIx} style={parent !== null ? { marginLeft: 24 } : undefined}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ color: C.dim, fontSize: '0.8rem' }}>
-              Process {chainIx + 1}{chain.closed ? ' (closed)' : ''}
+            <span
+              onClick={() => { if (selectable) onSelectChain(chainIx) }}
+              style={{
+                color: isTarget ? C.accent : C.dim, fontSize: '0.8rem',
+                fontWeight: isTarget ? 700 : 400,
+                cursor: selectable ? 'pointer' : 'default',
+              }}
+            >
+              {parent === null
+                ? `Process ${chainIx + 1}`
+                : `↳ Subagent of Process ${parent + 1}`}
+              {chain.closed ? ' (closed)' : ''}
+              {' '}
+              <span style={{ fontWeight: 400, opacity: 0.75 }}>
+                {chain.slots.length}/{chain.ceiling}
+              </span>
             </span>
+            {isTarget && G.contexts.length > 1 && (
+              <span style={{ color: C.accent, fontSize: '0.72rem' }}>← plays land here</span>
+            )}
+            {selectable && !isTarget && (
+              <button style={btn()} onClick={() => onSelectChain(chainIx)}>Play here</button>
+            )}
             {!chain.closed && G.phase === 'play' && (
               <button style={btn()} onClick={() => onCloseProcess(chainIx)}>Close</button>
             )}
@@ -46,7 +77,9 @@ export function ContextRow({
           <div style={{
             display: 'flex', gap: 8, flexWrap: 'wrap', minHeight: 170,
             alignItems: 'flex-start',
-            padding: 8, background: C.panelAlt, border: `1px dashed ${C.border}`,
+            padding: 8, background: C.panelAlt,
+            border: `1px ${isTarget && G.contexts.length > 1 ? 'solid' : 'dashed'} ${
+              isTarget && G.contexts.length > 1 ? C.accent : C.border}`,
             borderRadius: 8,
           }}>
             {chain.slots.length === 0 && (
@@ -122,7 +155,8 @@ export function ContextRow({
             })}
           </div>
         </div>
-      ))}
+        )
+      })}
 
       {G.injectedContributions.length > 0 && (
         <div style={{ fontSize: '0.8rem', color: C.danger }}>

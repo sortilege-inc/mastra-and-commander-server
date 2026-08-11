@@ -6,7 +6,7 @@
  * replay verifier and saved games.
  */
 import {
-  COMMANDER_ID, DEFAULT_CONTEXT_CEILING, DEFAULT_PROCESS_LIMIT, HAND_SIZE,
+  FRAMEWORK_ID, DEFAULT_CONTEXT_CEILING, DEFAULT_PROCESS_LIMIT, HAND_SIZE,
   LOADOUT_IDS, STARTING_MODEL_ID,
 } from '../constants'
 import type { MCState } from '../types'
@@ -50,13 +50,13 @@ export function buildInitialState(random: RandomAPI): MCState {
       ownerCardId: null,
     }],
     processLimit: DEFAULT_PROCESS_LIMIT,
-    commanderId: COMMANDER_ID,
+    frameworkId: FRAMEWORK_ID,
     loadout: [...LOADOUT_IDS],
     installedModelId: STARTING_MODEL_ID,
     roundPool: zeroPips(),
     servers: [],
     skillAttachments: [],
-    commanderFreeAgentUsed: false,
+    frameworkFreeAgentUsed: false,
 
     // RAG is part of the initial setup — in play from turn one, unbuilt.
     rag: {

@@ -1,13 +1,13 @@
 /**
  * The Operator's hand, the completed Claw's second hand, and the resource rail
- * (commander, equipment, model, round pool).
+ * (framework, equipment, model, round pool).
  *
  * Pitch selection: click a card's ⊕ to mark it as a pitch, then play another
  * card — the marked cards are passed as the move's `pitchIds`.
  */
 import * as React from 'react'
 import type { MCState } from './types'
-import { getCommander, getEquipment, getModel, getOperatorCard } from './cards/registry'
+import { getFramework, getEquipment, getModel, getOperatorCard } from './cards/registry'
 import { C, PIP_GLYPH, btn, panel } from './theme'
 import { CardFace } from './CardFace'
 import { TRAIT_EVENT, TRAIT_MODEL, TRAIT_RESPONSE } from './constants'
@@ -33,7 +33,7 @@ export function HandPanel({
   /** Stage this card as the face-down substrate for the next install. */
   onStageSubstrate: (cardId: string) => void
 }): React.ReactElement {
-  const commander = getCommander(G.commanderId)
+  const framework = getFramework(G.frameworkId)
   const model = getModel(G.installedModelId)
   const inPlay = G.phase === 'play'
   const inResponse = G.phase === 'response'
@@ -153,21 +153,21 @@ export function HandPanel({
       {/* Resource rail */}
       <div style={{ ...panel, display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div>
-          <div style={{ fontSize: '0.7rem', color: C.dim, marginBottom: 4 }}>COMMANDER</div>
+          <div style={{ fontSize: '0.7rem', color: C.dim, marginBottom: 4 }}>FRAMEWORK</div>
           <CardFace
-            cardId={G.commanderId}
-            label={commander.name}
+            cardId={G.frameworkId}
+            label={framework.name}
             width={84}
-            dimmed={G.commanderFreeAgentUsed}
-            ring={G.commanderFreeAgentUsed ? null : C.accent}
+            dimmed={G.frameworkFreeAgentUsed}
+            ring={G.frameworkFreeAgentUsed ? null : C.accent}
           />
           <div style={{
             fontSize: '0.68rem', marginTop: 3, maxWidth: 84,
-            color: G.commanderFreeAgentUsed ? C.dim : C.accent,
+            color: G.frameworkFreeAgentUsed ? C.dim : C.accent,
           }}>
-            {G.commanderFreeAgentUsed
+            {G.frameworkFreeAgentUsed
               ? 'free Agent used'
-              : `free ${commander.freeTrait} available`}
+              : `free ${framework.freeTrait} available`}
           </div>
         </div>
         <div>

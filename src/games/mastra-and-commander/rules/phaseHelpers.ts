@@ -253,7 +253,7 @@ export function roundRollover(G: MCState): void {
     ownerCardId: null,
   }]
   G.processLimit = DEFAULT_PROCESS_LIMIT
-  G.commanderFreeAgentUsed = false
+  G.frameworkFreeAgentUsed = false
 
   // 4. Round-scoped state clears.
   G.injectedContributions = []

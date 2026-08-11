@@ -144,7 +144,7 @@ export interface MCState {
   /** How many concurrent Processes are allowed this round. */
   processLimit: number
   /** Command zone — always in play (design §4). */
-  commanderId: string
+  frameworkId: string
   /** Starting equipment; auto-pitches from the deck top each round. */
   loadout: string[]
   installedModelId: string
@@ -156,8 +156,8 @@ export interface MCState {
   servers: ServerInstall[]
   /** Skills attached to loadout items. Persist; reached by a CALL. */
   skillAttachments: SkillAttachment[]
-  /** Set once the commander's free Agent has been used this round. */
-  commanderFreeAgentUsed: boolean
+  /** Set once the framework's free Agent has been used this round. */
+  frameworkFreeAgentUsed: boolean
 
   // ── RAG — the setup saga ────────────────────────────────────────────────
   rag: RagTrack

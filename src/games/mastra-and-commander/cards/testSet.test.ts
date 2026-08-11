@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ENTROPY_CARDS, ENTROPY_DECK_LIST, EQUIPMENT, EVAL_CARDS, FEATURE_CARDS,
-  MASTRA_COMMANDER, MODELS, OPERATOR_CARDS, OPERATOR_DECK_LIST, expandDeckList,
+  MASTRA_FRAMEWORK, MODELS, OPERATOR_CARDS, OPERATOR_DECK_LIST, expandDeckList,
 } from './testSet'
 import {
   ALL_CARD_IDS, getEntropyCard, getEvalCard, getOperatorCard,
@@ -95,9 +95,9 @@ describe('constants point at real cards', () => {
     expect(MODELS.some((m) => m.id === STARTING_MODEL_ID)).toBe(true)
   })
 
-  it('the commander is Mastra, granting a free Agent each round', () => {
-    expect(MASTRA_COMMANDER.id).toBe('MASTRA')
-    expect(MASTRA_COMMANDER.freeTrait).toBe('Agent')
+  it('the framework is Mastra, granting a free Agent each round', () => {
+    expect(MASTRA_FRAMEWORK.id).toBe('MASTRA')
+    expect(MASTRA_FRAMEWORK.freeTrait).toBe('Agent')
   })
 })
 

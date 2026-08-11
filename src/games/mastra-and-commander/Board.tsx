@@ -48,6 +48,17 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
   const [pitches, setPitches] = React.useState<string[]>([])
   /** Which hand card is staged as a server substrate for the next install. */
   const [substrate, setSubstrate] = React.useState<string | null>(null)
+  /** Which Process a played card lands in (Parallelism / Subagents open more). */
+  const [chainChoice, setChainChoice] = React.useState(0)
+
+  // Chains come and go — rollover collapses them, Subagents add them — so the
+  // stored index can outlive its Process. Clamp on read rather than tracking
+  // every mutation; an out-of-range choice would make every play INVALID_MOVE.
+  const targetChainIx = G.contexts[chainChoice] && !G.contexts[chainChoice].closed
+    ? chainChoice
+    : G.contexts.findIndex((chain) => !chain.closed) === -1
+      ? 0
+      : G.contexts.findIndex((chain) => !chain.closed)
 
   const clearPitches = () => setPitches([])
 
@@ -200,6 +211,8 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
           <ContextRow
             G={G}
             canRelay={G.phase === 'evalCheck'}
+            targetChainIx={targetChainIx}
+            onSelectChain={setChainChoice}
             onToggleRelay={(chainIx, slotIx) => moves.toggleRelay(chainIx, slotIx)}
             onCloseProcess={(chainIx) => moves.closeProcess(chainIx)}
           />
@@ -208,7 +221,7 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
             selectedPitches={pitches}
             onTogglePitch={togglePitch}
             onPlay={(cardId) => {
-              moves.playToContext(0, cardId, pitches.filter((id) => id !== cardId))
+              moves.playToContext(targetChainIx, cardId, pitches.filter((id) => id !== cardId))
               clearPitches()
             }}
             onEvent={(cardId) => {
@@ -216,12 +229,23 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
               clearPitches()
             }}
             onResponse={(cardId) => {
-              moves.playResponse(cardId, pitches.filter((id) => id !== cardId), 0, 0)
+              // Restore-type responses need the card they are un-subverting.
+              // Aim at the first subverted slot in any Process rather than
+              // slot 0, which is rarely the damaged one.
+              let chainIx = targetChainIx
+              let slotIx = 0
+              outer: for (let c = 0; c < G.contexts.length; c++) {
+                const slots = G.contexts[c]?.slots ?? []
+                for (let s = 0; s < slots.length; s++) {
+                  if (slots[s]?.subverted) { chainIx = c; slotIx = s; break outer }
+                }
+              }
+              moves.playResponse(cardId, pitches.filter((id) => id !== cardId), chainIx, slotIx)
               clearPitches()
             }}
             callTargets={callTargets}
             onCall={(cardId, target) => {
-              moves.callInstalled(0, cardId, target)
+              moves.callInstalled(targetChainIx, cardId, target)
               clearPitches()
             }}
             onAttachSkill={(cardId, equipmentId) => {

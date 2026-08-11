@@ -95,7 +95,7 @@ export const TRAIT_MODEL = 'Model'
 /** Traits that can be installed onto a face-down server substrate (design §4). */
 export const INSTALLABLE_TRAITS = ['MCP', 'Skill', 'Tool'] as const
 
-/** BEST-GUESS(Q6): the ecosystem roster. Card-level lock-in only; the commander
+/** BEST-GUESS(Q6): the ecosystem roster. Card-level lock-in only; the framework
  *  is ecosystem-neutral (locked). Mixing forgoes discounts, no penalty. */
 export const ECOSYSTEMS = ['anthropic', 'openai', 'google', 'oss'] as const
 export type Ecosystem = typeof ECOSYSTEMS[number]
@@ -206,15 +206,15 @@ export const STARTING_MODEL_ID = 'TEST-MODEL-SMALL'
 /** BEST-GUESS(Q10): each complete server grants this much at Reveal. */
 export const SERVER_GRANT: Pip[] = ['generic']
 
-// ── Commander — Mastra (design §4; ability set by owner 2026-08-10) ──
+// ── Framework — Mastra (design §4; ability set by owner 2026-08-10) ──
 //
 // Passive, not activated: the first Agent played each round costs nothing and
 // feeds no Entropy. The framework gives you one agent free; everything after it
 // is on you.
 
-export const COMMANDER_ID = 'MASTRA'
-/** Trait the commander's free play applies to. */
-export const COMMANDER_FREE_TRAIT = 'Agent'
+export const FRAMEWORK_ID = 'MASTRA'
+/** Trait the framework's free play applies to. */
+export const FRAMEWORK_FREE_TRAIT = 'Agent'
 
 // ── Match structure (owner ruling, 2026-08-10: a game is 3 evals) ──
 

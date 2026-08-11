@@ -186,12 +186,12 @@ export interface ModelDef {
 }
 
 /**
- * The commander in the command zone (design §4). Always in play.
+ * The framework in the command zone (design §4). Always in play.
  *
  * Mastra's ability is PASSIVE, not activated: the first card with
  * `freeTrait` played each round costs nothing and feeds no Entropy.
  */
-export interface CommanderDef {
+export interface FrameworkDef {
   id: string
   name: string
   /** Trait whose first play each round is free (cost and Entropy). */

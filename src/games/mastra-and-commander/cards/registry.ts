@@ -11,12 +11,12 @@
  * undefined into the rules and corrupting state.
  */
 import type {
-  CommanderDef, EntropyCardDef, EquipmentDef, EvalCardDef, FeatureCardDef,
+  FrameworkDef, EntropyCardDef, EquipmentDef, EvalCardDef, FeatureCardDef,
   ModelDef, OperatorCardDef,
 } from './types'
 import {
   ENTROPY_CARDS, EQUIPMENT, EVAL_CARDS, FEATURE_CARDS, MODELS, OPERATOR_CARDS,
-  MASTRA_COMMANDER,
+  MASTRA_FRAMEWORK,
 } from './testSet'
 
 function index<T extends { id: string }>(defs: T[]): Record<string, T> {
@@ -34,7 +34,7 @@ const EVAL_BY_ID = index(EVAL_CARDS)
 const FEATURE_BY_ID = index(FEATURE_CARDS)
 const EQUIPMENT_BY_ID = index(EQUIPMENT)
 const MODEL_BY_ID = index(MODELS)
-const COMMANDER_BY_ID = index([MASTRA_COMMANDER])
+const FRAMEWORK_BY_ID = index([MASTRA_FRAMEWORK])
 
 /**
  * The sentinel playerView.ts substitutes for a card the viewer may not see.
@@ -76,9 +76,9 @@ const HIDDEN_DEFS: Record<string, unknown> = {
   model: {
     id: HIDDEN_ID, name: 'Hidden model', grants: [], rulesText: '',
   } satisfies ModelDef,
-  commander: {
-    id: HIDDEN_ID, name: 'Hidden commander', freeTrait: '', rulesText: '',
-  } satisfies CommanderDef,
+  framework: {
+    id: HIDDEN_ID, name: 'Hidden framework', freeTrait: '', rulesText: '',
+  } satisfies FrameworkDef,
 }
 
 function get<T>(map: Record<string, T>, id: string, kind: string): T {
@@ -106,8 +106,8 @@ export const getEquipment = (id: string): EquipmentDef =>
 export const getModel = (id: string): ModelDef =>
   get(MODEL_BY_ID, id, 'model')
 
-export const getCommander = (id: string): CommanderDef =>
-  get(COMMANDER_BY_ID, id, 'commander')
+export const getFramework = (id: string): FrameworkDef =>
+  get(FRAMEWORK_BY_ID, id, 'framework')
 
 /** Non-throwing existence check — used by tests and by UI code that may hold a
  *  stale id from a saved game. */
@@ -121,5 +121,5 @@ export const ALL_CARD_IDS = (): string[] => [
   ...Object.keys(FEATURE_BY_ID),
   ...Object.keys(EQUIPMENT_BY_ID),
   ...Object.keys(MODEL_BY_ID),
-  ...Object.keys(COMMANDER_BY_ID),
+  ...Object.keys(FRAMEWORK_BY_ID),
 ]

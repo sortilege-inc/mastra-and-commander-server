@@ -55,7 +55,7 @@ describe('playToContext', () => {
     const G = emptyGameState()
     G.phase = 'play'
     G.operatorHand = ['TEST-OP-AGENT'] // costs technology, nothing available
-    G.commanderFreeAgentUsed = true    // testing the paid path
+    G.frameworkFreeAgentUsed = true    // testing the paid path
 
     const result = playToContext(mv(G), 0, 'TEST-OP-AGENT', [])
     expect(result).toBeDefined() // INVALID_MOVE
@@ -66,7 +66,7 @@ describe('playToContext', () => {
     const G = emptyGameState()
     G.phase = 'play'
     G.operatorHand = ['TEST-OP-AGENT', 'TEST-OP-SUBAGENT'] // subagent cost includes technology
-    G.commanderFreeAgentUsed = true // testing the paid path
+    G.frameworkFreeAgentUsed = true // testing the paid path
     G.operatorDeck = ['TEST-OP-SCRATCHPAD']
     G.entropyDeck = ['TEST-EN-STATIC', 'TEST-EN-HALLUCINATION', 'TEST-EN-SLOP']
 
@@ -85,7 +85,7 @@ describe('playToContext', () => {
     const G = emptyGameState()
     G.phase = 'play'
     G.operatorHand = ['TEST-OP-SWARM']
-    G.commanderFreeAgentUsed = true // Swarm is an Agent; test the paid path
+    G.frameworkFreeAgentUsed = true // Swarm is an Agent; test the paid path
     G.roundPool = { capital: 0, attention: 1, technology: 2, generic: 0 }
     G.entropyDeck = ['A', 'B', 'C', 'D'].map(() => 'TEST-EN-STATIC')
 
@@ -154,7 +154,7 @@ describe('events', () => {
   })
 })
 
-describe('commander — Mastra', () => {
+describe('framework — Mastra', () => {
   it('makes the first Agent each round free of cost and Entropy', () => {
     const G = emptyGameState()
     G.phase = 'play'
@@ -167,7 +167,7 @@ describe('commander — Mastra', () => {
     // Nothing paid, nothing fed.
     expect(G.roundPool.technology).toBe(0)
     expect(G.entropyStack).toHaveLength(0)
-    expect(G.commanderFreeAgentUsed).toBe(true)
+    expect(G.frameworkFreeAgentUsed).toBe(true)
   })
 
   it('charges the second Agent normally', () => {
@@ -192,7 +192,7 @@ describe('commander — Mastra', () => {
 
     const result = playToContext(mv(G), 0, 'TEST-OP-MCP-FILESYSTEM', [])
     expect(result).toBeDefined() // unpayable → INVALID_MOVE
-    expect(G.commanderFreeAgentUsed).toBe(false)
+    expect(G.frameworkFreeAgentUsed).toBe(false)
   })
 })
 

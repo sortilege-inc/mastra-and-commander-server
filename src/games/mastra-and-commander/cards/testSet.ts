@@ -9,13 +9,13 @@
  * processes, features, models, all three wrench vectors, every eval pattern)
  * needs at least one card that reaches it.
  *
- * The commander below is likewise a placeholder: the printed Mastra card is
+ * The framework below is likewise a placeholder: the printed Mastra card is
  * pending a redesign (owner, 2026-08-10) and is deliberately NOT implemented.
  *
  * Numbers here are chosen for testability, not balance.
  */
 import type {
-  CommanderDef, EntropyCardDef, EquipmentDef, EvalCardDef, FeatureCardDef,
+  FrameworkDef, EntropyCardDef, EquipmentDef, EvalCardDef, FeatureCardDef,
   ModelDef, OperatorCardDef,
 } from './types'
 import type { Color, Contribution, Shape } from '../constants'
@@ -23,9 +23,9 @@ import type { Color, Contribution, Shape } from '../constants'
 /** Terse contribution constructor — this file would be unreadable otherwise. */
 const c = (color: Color, shape: Shape): Contribution => ({ color, shape })
 
-// ── Commander (placeholder) ───────────────────────────────────────────────
+// ── Framework (placeholder) ───────────────────────────────────────────────
 
-export const MASTRA_COMMANDER: CommanderDef = {
+export const MASTRA_FRAMEWORK: FrameworkDef = {
   id: 'MASTRA',
   name: 'Mastra',
   freeTrait: 'Agent',

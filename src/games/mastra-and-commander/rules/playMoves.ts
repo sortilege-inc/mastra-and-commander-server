@@ -17,7 +17,7 @@
  *    them to the last face-up card.
  *  - A **Subagent** opens its own sub-context with its own ceiling, whose cards
  *    do not count against the parent's ceiling.
- *  - The commander makes the first **Agent** each round free — no cost, no
+ *  - The framework makes the first **Agent** each round free — no cost, no
  *    Entropy.
  *
  * All moves here are Operator-only and guard on phase + open gates.
@@ -30,7 +30,7 @@ import {
   TRAIT_SUBAGENT,
 } from '../constants'
 import type { MCState, CallTarget } from '../types'
-import { getCommander, getOperatorCard } from '../cards/registry'
+import { getFramework, getOperatorCard } from '../cards/registry'
 import { contributionSize } from '../cards/types'
 import {
   applyPlanToSources, chainOutputs, lastPayingSlot, planPayment, toPipCounts,
@@ -97,10 +97,10 @@ export function playToContext(
   // Events and Responses have their own moves/phases.
   if (def.traits.includes(TRAIT_EVENT)) return INVALID_MOVE
 
-  // Commander: the first Agent each round is free — no cost, no Entropy.
-  const commander = getCommander(G.commanderId)
-  const free = !G.commanderFreeAgentUsed
-    && def.traits.includes(commander.freeTrait)
+  // Framework: the first Agent each round is free — no cost, no Entropy.
+  const framework = getFramework(G.frameworkId)
+  const free = !G.frameworkFreeAgentUsed
+    && def.traits.includes(framework.freeTrait)
 
   const pitchDefs = resolvePitches(G, pitchIds)
   if (!pitchDefs) return INVALID_MOVE
@@ -138,8 +138,8 @@ export function playToContext(
   })
 
   if (free) {
-    G.commanderFreeAgentUsed = true
-    log(G, `played ${def.name} — free via ${commander.name}`)
+    G.frameworkFreeAgentUsed = true
+    log(G, `played ${def.name} — free via ${framework.name}`)
   } else {
     log(G, `played ${def.name} into the Context`)
     feedEntropy(G, feedCostOf(def), `played ${def.name}`)
