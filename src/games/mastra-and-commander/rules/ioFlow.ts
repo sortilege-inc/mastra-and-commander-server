@@ -38,7 +38,7 @@ import type { OperatorCardDef } from '../cards/types'
 export interface PaymentSources {
   /** The previous card's unspent outputs. Spent first (design §4). */
   prevOutputs: PipCounts
-  /** Free resources granted this round by equipment / model / servers / features. */
+  /** Free resources granted this round by loadout / model / servers / features. */
   roundPool: PipCounts
 }
 

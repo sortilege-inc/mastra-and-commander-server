@@ -79,7 +79,7 @@ describe('setup through the Client', () => {
     expect(G.currentEvalId).not.toBeNull()
     expect(G.operatorHand.length).toBeGreaterThan(0)
     expect(G.frameworkId).toBe('MASTRA')
-    // The Reveal engine ran: equipment granted resources.
+    // The Reveal engine ran: loadout granted resources.
     const pool = G.roundPool
     expect(pool.capital + pool.attention + pool.technology + pool.generic)
       .toBeGreaterThan(0)

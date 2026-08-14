@@ -14,7 +14,7 @@
 import * as React from 'react'
 import type { MCState } from './types'
 import { RAG_CHAPTERS, RAG_RERANK_INDEX, RAG_UPSERT_INDEX, CLAW_COMPLETE_COUNT } from './constants'
-import { getEquipment, getFramework, getModel, getOperatorCard } from './cards/registry'
+import { getLoadout, getFramework, getModel, getOperatorCard } from './cards/registry'
 import { C, COLOR_SWATCH, PIP_GLYPH, SHAPE_GLYPH, panel } from './theme'
 import { CardBack, CardFace } from './CardFace'
 
@@ -134,11 +134,11 @@ export function EnginePanel({ G, ragButton }: {
         >
           <div style={{ display: 'flex', gap: 6 }}>
             {G.loadout.map((id) => {
-              const attached = G.skillAttachments.find((a) => a.equipmentId === id)
+              const attached = G.skillAttachments.find((a) => a.loadoutId === id)
               return (
                 <div key={id}>
                   <div style={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
-                    <CardFace cardId={id} label={getEquipment(id).name} width={ANCHOR} />
+                    <CardFace cardId={id} label={getLoadout(id).name} width={ANCHOR} />
                     {attached && (
                       <CardFace
                         cardId={attached.skillCardId}

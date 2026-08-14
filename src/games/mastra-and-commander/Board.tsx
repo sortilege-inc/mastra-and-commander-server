@@ -101,7 +101,7 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
       label: `${getOperatorCard(server.traitCardId).name} (server)`,
     })),
     ...G.skillAttachments.map((attachment) => ({
-      target: { kind: 'skill' as const, equipmentId: attachment.equipmentId },
+      target: { kind: 'skill' as const, loadoutId: attachment.loadoutId },
       label: `${getOperatorCard(attachment.skillCardId).name} (skill)`,
     })),
     ...(G.rag.chaptersComplete > RAG_UPSERT_INDEX
@@ -266,8 +266,8 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
               moves.callInstalled(targetChainIx, cardId, target)
               clearPitches()
             }}
-            onAttachSkill={(cardId, equipmentId) => {
-              moves.attachSkill(equipmentId, cardId, pitches.filter((id) => id !== cardId))
+            onAttachSkill={(cardId, loadoutId) => {
+              moves.attachSkill(loadoutId, cardId, pitches.filter((id) => id !== cardId))
               clearPitches()
             }}
             onClaw={(cardId) => { moves.loadClaw(cardId); clearPitches() }}

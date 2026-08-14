@@ -28,7 +28,7 @@ import type { Contribution, PipCounts, RoundPhase } from './constants'
  */
 export type CallTarget =
   | { kind: 'server'; serverId: string }
-  | { kind: 'skill'; equipmentId: string }
+  | { kind: 'skill'; loadoutId: string }
   | { kind: 'rag' }
 
 /** One card in a Context chain, with its unspent outputs and round-state marks. */
@@ -54,7 +54,7 @@ export interface ContextSlot {
 /** A Skill attached to a loadout item (rig / cloud). Gains Durable and
  *  persists; reached by playing a face-down CALL. */
 export interface SkillAttachment {
-  equipmentId: string
+  loadoutId: string
   skillCardId: string
 }
 
@@ -154,10 +154,10 @@ export interface MCState {
   processLimit: number
   /** Command zone — always in play (design §4). */
   frameworkId: string
-  /** Starting equipment; auto-pitches from the deck top each round. */
+  /** Starting loadout; auto-pitches from the deck top each round. */
   loadout: string[]
   installedModelId: string
-  /** Free resources granted this round by equipment / model / servers. Spent,
+  /** Free resources granted this round by loadout / model / servers. Spent,
    *  never tapped; zeroed at rollover. */
   roundPool: PipCounts
   /** Installed MCP servers — a Tool over a face-down substrate. Persist for

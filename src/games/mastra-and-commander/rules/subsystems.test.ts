@@ -347,7 +347,7 @@ describe('Tool and Skill placement', () => {
 
     attachSkill(mv(G), 'TEST-EQ-LOCAL-RIG', 'TEST-OP-SKILL-SUMMARIZE', [])
     expect(G.skillAttachments).toEqual([{
-      equipmentId: 'TEST-EQ-LOCAL-RIG',
+      loadoutId: 'TEST-EQ-LOCAL-RIG',
       skillCardId: 'TEST-OP-SKILL-SUMMARIZE',
     }])
   })
@@ -356,7 +356,7 @@ describe('Tool and Skill placement', () => {
     const G = emptyGameState()
     G.phase = 'play'
     G.skillAttachments = [{
-      equipmentId: 'TEST-EQ-LOCAL-RIG',
+      loadoutId: 'TEST-EQ-LOCAL-RIG',
       skillCardId: 'TEST-OP-SKILL-SUMMARIZE',
     }]
     G.operatorHand = ['TEST-OP-SKILL-SUMMARIZE']

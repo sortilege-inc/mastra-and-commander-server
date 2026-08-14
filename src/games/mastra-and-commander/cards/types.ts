@@ -167,9 +167,9 @@ export interface FeatureCardDef {
   rulesText: string
 }
 
-/** Starting loadout equipment (design §4): auto-pitches from the deck top and
+/** Starting loadout loadout (design §4): auto-pitches from the deck top and
  *  grants free resources of its types each round. */
-export interface EquipmentDef {
+export interface LoadoutDef {
   id: string
   name: string
   grants: Pip[]

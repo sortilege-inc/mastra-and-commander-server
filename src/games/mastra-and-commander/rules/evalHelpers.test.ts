@@ -157,10 +157,10 @@ describe('contributionsOf', () => {
   it('scores a called Skill from its loadout attachment', () => {
     const G = emptyGameState()
     G.skillAttachments = [{
-      equipmentId: 'TEST-EQ-LOCAL-RIG',
+      loadoutId: 'TEST-EQ-LOCAL-RIG',
       skillCardId: 'TEST-OP-SKILL-SUMMARIZE', // amber triangle
     }]
-    placeCall(G, 'TEST-OP-SCRATCHPAD', { kind: 'skill', equipmentId: 'TEST-EQ-LOCAL-RIG' })
+    placeCall(G, 'TEST-OP-SCRATCHPAD', { kind: 'skill', loadoutId: 'TEST-EQ-LOCAL-RIG' })
     expect(contributionsOf(G)).toEqual([c('amber', 'triangle')])
   })
 

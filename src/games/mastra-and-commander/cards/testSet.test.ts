@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  ENTROPY_CARDS, ENTROPY_DECK_LIST, EQUIPMENT, EVAL_CARDS, FEATURE_CARDS,
+  ENTROPY_CARDS, ENTROPY_DECK_LIST, LOADOUT, EVAL_CARDS, FEATURE_CARDS,
   MASTRA_FRAMEWORK, MODELS, OPERATOR_CARDS, OPERATOR_DECK_LIST, expandDeckList,
 } from './testSet'
 import {
@@ -78,7 +78,7 @@ describe('deck lists resolve', () => {
   })
 
   it('builds a deck big enough to outlast a match', () => {
-    // 5 rounds of draws, pitches, and 2 equipment mills per round.
+    // 5 rounds of draws, pitches, and 2 loadout mills per round.
     expect(expandDeckList(OPERATOR_DECK_LIST).length).toBeGreaterThan(30)
     expect(expandDeckList(ENTROPY_DECK_LIST).length).toBeGreaterThan(20)
   })
@@ -87,7 +87,7 @@ describe('deck lists resolve', () => {
 describe('constants point at real cards', () => {
   it('the loadout ids exist', () => {
     for (const id of LOADOUT_IDS) {
-      expect(EQUIPMENT.some((e) => e.id === id)).toBe(true)
+      expect(LOADOUT.some((e) => e.id === id)).toBe(true)
     }
   })
 

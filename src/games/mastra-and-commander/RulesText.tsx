@@ -15,12 +15,29 @@
  */
 import * as React from 'react'
 
-/** Printed icon token -> the resource it denotes. */
+/**
+ * Printed pip token -> the word shown in its place.
+ *
+ * Card text writes pips as `{value}{attention}{automation}{wild}` (owner rename,
+ * 2026-08-13). The older glyph spellings and the internal keys are kept as
+ * aliases so text from any vintage renders — the design repo's `deck.rb` aliases
+ * the same way, and rules text in `cards.yml` may use either.
+ */
 const TOKEN_WORD: Record<string, string> = {
-  coin: 'capital',
+  // Current names.
+  value: 'value',
+  attention: 'attention',
+  automation: 'automation',
+  wild: 'wild',
+  // Legacy glyph names.
+  coin: 'value',
   eye: 'attention',
-  gear: 'technology',
-  blank: 'generic',
+  gear: 'automation',
+  blank: 'wild',
+  // Internal keys, in case a raw key reaches the text layer.
+  capital: 'value',
+  technology: 'automation',
+  generic: 'wild',
 }
 
 /** Splits on **bold** runs and {token}s, keeping the delimiters. */

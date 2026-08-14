@@ -179,7 +179,7 @@ describe('round-scoped state clears', () => {
 
     expect(G.injectedContributions).toEqual([])
     expect(G.entropyFedThisRound).toBe(0)
-    // enterReveal for the new round may have granted pool from equipment, but
+    // enterReveal for the new round may have granted pool from loadout, but
     // the OLD pool value is gone.
     expect(G.roundPool.technology).toBeLessThan(3)
   })

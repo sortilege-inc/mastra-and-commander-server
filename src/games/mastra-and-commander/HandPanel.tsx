@@ -9,7 +9,7 @@
  */
 import * as React from 'react'
 import type { MCState } from './types'
-import { getEquipment, getOperatorCard } from './cards/registry'
+import { getLoadout, getOperatorCard } from './cards/registry'
 import { C, btn } from './theme'
 import { CardFace } from './CardFace'
 import { TRAIT_EVENT, TRAIT_MODEL, TRAIT_RESPONSE } from './constants'
@@ -27,7 +27,7 @@ export function HandPanel({
   onEvent: (cardId: string) => void
   onResponse: (cardId: string) => void
   onCall: (cardId: string, target: CallTarget) => void
-  onAttachSkill: (cardId: string, equipmentId: string) => void
+  onAttachSkill: (cardId: string, loadoutId: string) => void
   onClaw: (cardId: string) => void
   onUpgrade: (cardId: string) => void
   /** Install this Tool onto the staged face-down substrate. */
@@ -38,8 +38,8 @@ export function HandPanel({
   const inPlay = G.phase === 'play'
   const inResponse = G.phase === 'response'
   /** Loadout slots with no Skill on them yet. */
-  const freeEquipment = G.loadout.filter(
-    (id) => !G.skillAttachments.some((a) => a.equipmentId === id))
+  const freeLoadout = G.loadout.filter(
+    (id) => !G.skillAttachments.some((a) => a.loadoutId === id))
 
   const renderCard = (cardId: string, ix: number, fromClaw: boolean) => {
     const def = getOperatorCard(cardId)
@@ -110,14 +110,14 @@ export function HandPanel({
             </button>
           )}
           {/* Skill: attach to a free loadout slot, gaining Durable. */}
-          {inPlay && isSkill && freeEquipment.map((equipmentId) => (
+          {inPlay && isSkill && freeLoadout.map((loadoutId) => (
             <button
-              key={equipmentId}
+              key={loadoutId}
               style={btn()}
-              onClick={() => onAttachSkill(cardId, equipmentId)}
+              onClick={() => onAttachSkill(cardId, loadoutId)}
               title="Attach to this loadout item: Durable, persists all match"
             >
-              →{getEquipment(equipmentId).name}
+              →{getLoadout(loadoutId).name}
             </button>
           ))}
           {/* Any card can be spent face-down to CALL an installed resource. */}

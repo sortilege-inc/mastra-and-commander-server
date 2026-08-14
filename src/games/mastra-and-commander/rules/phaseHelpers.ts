@@ -14,7 +14,7 @@ import {
 } from '../constants'
 import type { Pip } from '../constants'
 import type { EvalTier, MCState } from '../types'
-import { getEquipment, getEvalCard, getModel, getOperatorCard } from '../cards/registry'
+import { getLoadout, getEvalCard, getModel, getOperatorCard } from '../cards/registry'
 import { contextSize, contributionsOf, isPass, scoreTier } from './evalHelpers'
 import { feedEntropy, log, refillHand } from './playHelpers'
 import { zeroPips } from './ioFlow'
@@ -30,7 +30,7 @@ function grant(G: MCState, pips: Pip[], reason: string): void {
  * Phase 1 — Reveal.
  *
  * Reveals the objective, then runs the Operator's free economy for the round:
- * equipment auto-pitch, model grant, server grants, and the Feature offer.
+ * loadout auto-pitch, model grant, server grants, and the Feature offer.
  */
 export function enterReveal(G: MCState): void {
   G.phase = 'reveal'
@@ -53,13 +53,13 @@ export function enterReveal(G: MCState): void {
     log(G, `context ceiling for this eval: ${ceiling}`)
   }
 
-  // 2. Equipment auto-pitch (design §4: equipment "auto-pitches cards off the
+  // 2. Loadout auto-pitch (design §4: loadout "auto-pitches cards off the
   //    top of your deck ... and grants free resources of its types").
-  //    BEST-GUESS(Q12): one card milled per equipment, no draw, and — unlike a
+  //    BEST-GUESS(Q12): one card milled per loadout, no draw, and — unlike a
   //    hand pitch — no Entropy feed. This is the free baseline economy; taxing
   //    it would make the loadout a liability rather than a floor.
   for (const equipId of G.loadout) {
-    const equip = getEquipment(equipId)
+    const equip = getLoadout(equipId)
     const milled = G.operatorDeck.shift()
     if (milled !== undefined) {
       G.operatorDiscard.push(milled)

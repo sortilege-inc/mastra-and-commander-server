@@ -37,8 +37,8 @@ export function slotContributions(G: MCState, slot: ContextSlot): Contribution[]
         return getOperatorCard(server.traitCardId).contributes
       }
       case 'skill': {
-        const { equipmentId } = slot.calls
-        const attachment = G.skillAttachments.find((a) => a.equipmentId === equipmentId)
+        const { loadoutId } = slot.calls
+        const attachment = G.skillAttachments.find((a) => a.loadoutId === loadoutId)
         return attachment ? getOperatorCard(attachment.skillCardId).contributes : []
       }
       case 'rag':

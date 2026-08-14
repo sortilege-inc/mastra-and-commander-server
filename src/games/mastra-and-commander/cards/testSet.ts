@@ -15,7 +15,7 @@
  * Numbers here are chosen for testability, not balance.
  */
 import type {
-  FrameworkDef, EntropyCardDef, EquipmentDef, EvalCardDef, FeatureCardDef,
+  FrameworkDef, EntropyCardDef, LoadoutDef, EvalCardDef, FeatureCardDef,
   ModelDef, OperatorCardDef,
 } from './types'
 import type { Color, Contribution, Shape } from '../constants'
@@ -366,7 +366,7 @@ export const EVAL_CARDS: EvalCardDef[] = [
   },
 ]
 
-// ── Features, equipment, models ───────────────────────────────────────────
+// ── Features, loadout, models ───────────────────────────────────────────
 
 export const FEATURE_CARDS: FeatureCardDef[] = [
   {
@@ -395,7 +395,7 @@ export const FEATURE_CARDS: FeatureCardDef[] = [
   },
 ]
 
-export const EQUIPMENT: EquipmentDef[] = [
+export const LOADOUT: LoadoutDef[] = [
   {
     id: 'TEST-EQ-LOCAL-RIG',
     name: 'Local Rig',

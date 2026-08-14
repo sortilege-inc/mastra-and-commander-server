@@ -37,6 +37,25 @@ export interface Contribution {
 export const CURRENCIES = ['capital', 'attention', 'technology'] as const
 export type Currency = typeof CURRENCIES[number]
 
+/**
+ * What each pip is CALLED on the printed card (owner rename, 2026-08-13).
+ *
+ * The keys above stay `capital` / `technology` / `generic` as stable
+ * identifiers — the design repo's `deck.rb` aliases the same way, so the two
+ * sides agree without a data migration. Anything player-facing goes through
+ * this map; nothing should print a raw key.
+ */
+export const PIP_NAME = {
+  capital: 'Value',
+  attention: 'Attention',
+  technology: 'Automation',
+  generic: 'Wild',
+} as const satisfies Record<string, string>
+
+/** Lower-case form for mid-sentence use. */
+export const pipName = (pip: keyof typeof PIP_NAME): string =>
+  PIP_NAME[pip].toLowerCase()
+
 /** A cost/output pip as printed on a card edge. `generic` (the design's `blank`
  *  pip) means "any type" on a cost, and "unassigned" on an output. */
 export const PIPS = ['capital', 'attention', 'technology', 'generic'] as const
@@ -199,7 +218,7 @@ export const ECOSYSTEM_DISCOUNT_PIPS = 1
 
 // ── Loadout / models (design §4 — sizes 🟨, roles ❓Q11/Q12) ──
 
-/** BEST-GUESS(Q12): two equipment slots — a local desktop rig and a cloud. */
+/** BEST-GUESS(Q12): two loadout slots — a local desktop rig and a cloud. */
 export const LOADOUT_IDS = ['TEST-EQ-LOCAL-RIG', 'TEST-EQ-CLOUD'] as const
 /** Locked: "a starting model comes in for free". */
 export const STARTING_MODEL_ID = 'TEST-MODEL-SMALL'

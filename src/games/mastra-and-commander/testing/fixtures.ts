@@ -56,7 +56,7 @@ export function emptyGameState(): MCState {
   // silently end every test that rolls a round over. Tests that specifically
   // want an exhausted deck set it themselves.
   G.operatorDeck = Array(20).fill('TEST-OP-SCRATCHPAD')
-  // enterReveal has already run the equipment auto-pitch, so the discard is
+  // enterReveal has already run the loadout auto-pitch, so the discard is
   // non-empty by the time we get here. Clear it so tests start from zero.
   G.operatorDiscard = []
   G.contexts = [{

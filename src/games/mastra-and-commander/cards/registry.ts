@@ -11,11 +11,11 @@
  * undefined into the rules and corrupting state.
  */
 import type {
-  FrameworkDef, EntropyCardDef, EquipmentDef, EvalCardDef, FeatureCardDef,
+  FrameworkDef, EntropyCardDef, LoadoutDef, EvalCardDef, FeatureCardDef,
   ModelDef, OperatorCardDef,
 } from './types'
 import {
-  ENTROPY_CARDS, EQUIPMENT, EVAL_CARDS, FEATURE_CARDS, MODELS, OPERATOR_CARDS,
+  ENTROPY_CARDS, LOADOUT, EVAL_CARDS, FEATURE_CARDS, MODELS, OPERATOR_CARDS,
   MASTRA_FRAMEWORK,
 } from './testSet'
 
@@ -32,7 +32,7 @@ const OPERATOR_BY_ID = index(OPERATOR_CARDS)
 const ENTROPY_BY_ID = index(ENTROPY_CARDS)
 const EVAL_BY_ID = index(EVAL_CARDS)
 const FEATURE_BY_ID = index(FEATURE_CARDS)
-const EQUIPMENT_BY_ID = index(EQUIPMENT)
+const LOADOUT_BY_ID = index(LOADOUT)
 const MODEL_BY_ID = index(MODELS)
 const FRAMEWORK_BY_ID = index([MASTRA_FRAMEWORK])
 
@@ -70,9 +70,9 @@ const HIDDEN_DEFS: Record<string, unknown> = {
     id: HIDDEN_ID, name: 'Hidden feature',
     effect: { kind: 'drawNow', n: 0 }, rulesText: '',
   } satisfies FeatureCardDef,
-  equipment: {
-    id: HIDDEN_ID, name: 'Hidden equipment', grants: [], rulesText: '',
-  } satisfies EquipmentDef,
+  loadout: {
+    id: HIDDEN_ID, name: 'Hidden loadout', grants: [], rulesText: '',
+  } satisfies LoadoutDef,
   model: {
     id: HIDDEN_ID, name: 'Hidden model', grants: [], rulesText: '',
   } satisfies ModelDef,
@@ -100,8 +100,8 @@ export const getEvalCard = (id: string): EvalCardDef =>
 export const getFeatureCard = (id: string): FeatureCardDef =>
   get(FEATURE_BY_ID, id, 'feature')
 
-export const getEquipment = (id: string): EquipmentDef =>
-  get(EQUIPMENT_BY_ID, id, 'equipment')
+export const getLoadout = (id: string): LoadoutDef =>
+  get(LOADOUT_BY_ID, id, 'loadout')
 
 export const getModel = (id: string): ModelDef =>
   get(MODEL_BY_ID, id, 'model')
@@ -119,7 +119,7 @@ export const ALL_CARD_IDS = (): string[] => [
   ...Object.keys(ENTROPY_BY_ID),
   ...Object.keys(EVAL_BY_ID),
   ...Object.keys(FEATURE_BY_ID),
-  ...Object.keys(EQUIPMENT_BY_ID),
+  ...Object.keys(LOADOUT_BY_ID),
   ...Object.keys(MODEL_BY_ID),
   ...Object.keys(FRAMEWORK_BY_ID),
 ]

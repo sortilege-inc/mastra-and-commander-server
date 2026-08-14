@@ -202,7 +202,7 @@ export function callTargetExists(G: MCState, target: CallTarget): boolean {
       return !!server && !server.disabled
     }
     case 'skill':
-      return G.skillAttachments.some((a) => a.equipmentId === target.equipmentId)
+      return G.skillAttachments.some((a) => a.loadoutId === target.loadoutId)
     case 'rag':
       return G.rag.chaptersComplete > RAG_UPSERT_INDEX
   }
@@ -223,7 +223,7 @@ export function describeCallTarget(G: MCState, target: CallTarget): string {
       return server ? getOperatorCard(server.traitCardId).name : 'a destroyed server'
     }
     case 'skill': {
-      const attachment = G.skillAttachments.find((a) => a.equipmentId === target.equipmentId)
+      const attachment = G.skillAttachments.find((a) => a.loadoutId === target.loadoutId)
       return attachment ? getOperatorCard(attachment.skillCardId).name : 'a Skill'
     }
     case 'rag':
@@ -336,15 +336,15 @@ export function installServer(
  */
 export function attachSkill(
   { G, playerID }: MoveCtx,
-  equipmentId: string,
+  loadoutId: string,
   cardId: string,
   pitchIds: string[] = [],
 ) {
   if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
   if (!inHand(G, cardId)) return INVALID_MOVE
-  if (!G.loadout.includes(equipmentId)) return INVALID_MOVE
+  if (!G.loadout.includes(loadoutId)) return INVALID_MOVE
   // One Skill per loadout item.
-  if (G.skillAttachments.some((a) => a.equipmentId === equipmentId)) return INVALID_MOVE
+  if (G.skillAttachments.some((a) => a.loadoutId === loadoutId)) return INVALID_MOVE
 
   const def = getOperatorCard(cardId)
   if (!def.traits.includes('Skill')) return INVALID_MOVE
@@ -364,8 +364,8 @@ export function attachSkill(
   applyPlanToSources(result.plan, null, G.roundPool)
   executePitches(G, result.plan.pitches, `attaching ${def.name}`)
   removeFromHands(G, cardId)
-  G.skillAttachments.push({ equipmentId, skillCardId: cardId })
-  log(G, `attached ${def.name} to ${equipmentId} (Durable, persists)`)
+  G.skillAttachments.push({ loadoutId, skillCardId: cardId })
+  log(G, `attached ${def.name} to ${loadoutId} (Durable, persists)`)
   feedEntropy(G, SKILL_ATTACH_ENTROPY, `attached ${def.name}`)
   refillHand(G, `attached ${def.name}`)
 }
