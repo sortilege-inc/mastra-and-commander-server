@@ -12,32 +12,41 @@ transcripts) and swaps in Mastra & Commander as the game.
 
 ## Status
 
-**First pass — playable end to end.** The full round loop (Reveal → Play →
-Entropy → Response → Eval check → rollover) runs with every subsystem
-implemented: the pitch economy, the Context I/O chain, the Entropy LIFO stack
-and all three wrench vectors, Contribution/Eval scoring on the success ladder,
-relay/Durable, RAG, the Claw, servers, Features, Models, equipment, Processes,
-and ecosystem discounts. A **3-eval** match resolves to a winner.
+**Playable — being rebuilt onto the real card set.** The round loop (Reveal →
+Play → Entropy → Response → Eval check → rollover) runs end to end with the
+pitch economy, the Context I/O chain, the Entropy LIFO stack, Contribution/Eval
+scoring on the success ladder, relay/Durable, RAG, the Claw, servers and
+ecosystem discounts.
 
-Key mechanics as of the 2026-08-10 rulings:
+Key mechanics as of the 2026-08-13 rules pass:
 
-- **Mastra** makes the **first Agent each round free** — no cost, no Entropy.
+- **The Context is a tree of Agent-owned rows.** A row is owned by an **Agent
+  token**; the round opens with one (free via Mastra) and each further Agent
+  opens a **child row of the row it came from**. "Subagent" just means an Agent
+  opened when a row already exists. *Process is retired.*
+- **Agent tokens come only from a supply** — put into play by cards that spawn
+  them (Parallelism), never drawn or bought.
+- **Ongoing Entropy persists on a threat row** until its `Trigger:` clears it,
+  rather than resolving once and discarding.
+- **Mastra** makes the **first Agent each round free** — which is how the
+  opening row arrives.
 - **Pitching is always legal**; its Entropy price is set by how the pitched
   card's Contribution matches the card being paid for: **1** for colour+shape,
   **2** for either, **3** for neither.
-- The hand is **always five cards**; the **deck** is the clock, and cycling it
-  ends the match.
-- **Tools** install as MCP servers (Tool + face-down substrate, 2 Entropy,
-  Durable, persists) or play inline for 1 without Durable. **Skills** attach to
-  the rig/cloud for Durable, or play inline without.
-- Installed Tools/Skills and a completed RAG **don't score on their own** — you
-  play a card **face-down as a call**, free, and the called resource's
-  Contribution enters the Context. Face-down cards are **skipped for I/O**.
-- **RAG is a setup saga**: Chunk/Embed/Insert/Upsert/(Rerank), 1 pip each of a
-  different type; Upsert's fed card sets the payload, Rerank swaps it for one of
-  equal size.
-- A context window holds **7 cards** (or whatever the Objective says);
-  **Subagents open their own** window that doesn't count against the parent's.
+- The hand is **always five cards**; the **deck** is the clock.
+- **A `Call:` does both** — delivers the installed resource's Contribution *and*
+  resolves the printed text, free of Entropy.
+- **`Entropy N:` is a cost** — feed N cards from the Entropy deck onto the stack
+  to pay it (Fable).
+- Pips print as **Value / Attention / Automation / Wild**; the internal keys stay
+  `capital`/`attention`/`technology`/`generic`, matching the design repo's
+  `deck.rb` aliases.
+- Each row holds **7 cards** by default, less any Ongoing reduction; a child
+  row's cards don't count against its parent's.
+- **Models, loadouts and features live in the operator deck** as findable
+  upgrades, so Y-Combinator's tutor has something to find. No separate Features
+  deck.
+
 
 ⚠ **Many rules here are BEST-GUESS placeholders.** The design doc
 ([`../mastra-and-commander/cards/game-design.md`](../mastra-and-commander/cards/game-design.md))
@@ -47,9 +56,12 @@ felt. Every invention is tagged `BEST-GUESS(Qn)` in the code and listed in the
 [Best-guess registry](#best-guess-registry-for-design-review) below — that list
 is the audit surface, and each entry is expected to be revised.
 
-All cards are **synthetic `TEST-` placeholders** authored to exercise the
-engine. They are not card design; the real roster and its mechanics remain the
-owner's design pass. A TicTacToe placeholder is kept alongside as a known-good
+Cards are the owner's **first playable 15-card set**, transcribed from the
+design repo's `cards.yml`. It is sized for **roughing out the opening turns**,
+not for a balanced three-eval match — decks repeat the same cards to reach a
+drawable size. Where a printed mechanic isn't wired yet, its payload carries an
+`unimplemented` flag and the board says so, so a half-built card can't pass for
+a working one. A TicTacToe placeholder is kept alongside as a known-good
 wiring baseline.
 
 The **card content and printed frames** live in the sibling repo
@@ -90,7 +102,7 @@ src/
       gates.ts          GATE_MANIFEST — the pending* gate registry.
       playerView.ts     Per-seat redaction of hidden information.
       theme.ts          Shared style vocabulary for the board.
-      cards/            Card data contract, the TEST- set, and the registry.
+      cards/            Card data contract, the 15-card set, and the registry.
       rules/            Move handlers (*Moves.ts) + pure helpers (*Helpers.ts).
         ioFlow.ts       ★ The provisional-I/O quarantine (see below).
       testing/          Fixtures built from the real setup().
