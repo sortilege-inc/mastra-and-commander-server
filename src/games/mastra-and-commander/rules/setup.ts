@@ -6,13 +6,11 @@
  * replay verifier and saved games.
  */
 import {
-  FRAMEWORK_ID, DEFAULT_CONTEXT_CEILING, DEFAULT_PROCESS_LIMIT, HAND_SIZE,
+  FRAMEWORK_ID, DEFAULT_PROCESS_LIMIT, HAND_SIZE,
   LOADOUT_IDS, STARTING_MODEL_ID,
 } from '../constants'
 import type { MCState } from '../types'
-import {
-  ENTROPY_DECK_LIST, EVAL_CARDS, FEATURE_CARDS, OPERATOR_DECK_LIST, expandDeckList,
-} from '../cards/testSet'
+import { DECK_RECIPE, expandRecipe } from '../cards/cardSet'
 import { zeroPips } from './ioFlow'
 
 /** The slice of boardgame.io's random plugin we use. */
@@ -21,10 +19,15 @@ export interface RandomAPI {
 }
 
 export function buildInitialState(random: RandomAPI): MCState {
-  const operatorDeck = random.Shuffle(expandDeckList(OPERATOR_DECK_LIST))
-  const entropyDeck = random.Shuffle(expandDeckList(ENTROPY_DECK_LIST))
-  const evalDeck = random.Shuffle(EVAL_CARDS.map((e) => e.id))
-  const featuresDeck = random.Shuffle(FEATURE_CARDS.map((f) => f.id))
+  // Models, loadouts and features shuffle into the OPERATOR deck as findable
+  // upgrades (owner ruling, 2026-08-13) — that is what makes Y-Combinator's
+  // tutor meaningful. One loadout and one model are also in play from setup.
+  const operatorDeck = random.Shuffle(expandRecipe(DECK_RECIPE.operator))
+  const entropyDeck = random.Shuffle(expandRecipe(DECK_RECIPE.entropy))
+  const evalDeck = random.Shuffle([...DECK_RECIPE.evals])
+  // The Features deck is gone as a separate pile; feature cards are drawn or
+  // tutored like anything else. Kept empty so the reveal-phase offer is a no-op.
+  const featuresDeck: string[] = []
 
   // Opening hand off the top of the shuffled deck.
   const operatorHand = operatorDeck.splice(0, HAND_SIZE)
@@ -42,13 +45,10 @@ export function buildInitialState(random: RandomAPI): MCState {
     operatorDeck,
     operatorHand,
     operatorDiscard: [],
-    contexts: [{
-      slots: [],
-      closed: false,
-      ceiling: DEFAULT_CONTEXT_CEILING,
-      parentChainIx: null,
-      ownerCardId: null,
-    }],
+    // No rows at setup. A Context row is OWNED by an Agent token (owner ruling,
+    // 2026-08-13), and the round opens by putting the first one into play — free
+    // via Mastra. enterReveal does that, so round 1 matches every later round.
+    contexts: [],
     processLimit: DEFAULT_PROCESS_LIMIT,
     frameworkId: FRAMEWORK_ID,
     loadout: [...LOADOUT_IDS],
@@ -58,6 +58,7 @@ export function buildInitialState(random: RandomAPI): MCState {
     nextServerSeq: 1,
     skillAttachments: [],
     frameworkFreeAgentUsed: false,
+    threats: [],
 
     // RAG is part of the initial setup — in play from turn one, unbuilt.
     rag: {

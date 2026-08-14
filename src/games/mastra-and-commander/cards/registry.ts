@@ -12,12 +12,12 @@
  */
 import type {
   FrameworkDef, EntropyCardDef, LoadoutDef, EvalCardDef, FeatureCardDef,
-  ModelDef, OperatorCardDef,
+  ModelDef, OperatorCardDef, TokenDef,
 } from './types'
 import {
-  ENTROPY_CARDS, LOADOUT, EVAL_CARDS, FEATURE_CARDS, MODELS, OPERATOR_CARDS,
-  MASTRA_FRAMEWORK,
-} from './testSet'
+  AGENT_TOKEN, ENTROPY_CARDS, EVAL_CARDS, FEATURE_CARDS, LOADOUT_CARDS,
+  MASTRA, MODEL_CARDS, OPERATOR_CARDS,
+} from './cardSet'
 
 function index<T extends { id: string }>(defs: T[]): Record<string, T> {
   const map: Record<string, T> = {}
@@ -32,9 +32,10 @@ const OPERATOR_BY_ID = index(OPERATOR_CARDS)
 const ENTROPY_BY_ID = index(ENTROPY_CARDS)
 const EVAL_BY_ID = index(EVAL_CARDS)
 const FEATURE_BY_ID = index(FEATURE_CARDS)
-const LOADOUT_BY_ID = index(LOADOUT)
-const MODEL_BY_ID = index(MODELS)
-const FRAMEWORK_BY_ID = index([MASTRA_FRAMEWORK])
+const LOADOUT_BY_ID = index(LOADOUT_CARDS)
+const MODEL_BY_ID = index(MODEL_CARDS)
+const FRAMEWORK_BY_ID = index([MASTRA])
+const TOKEN_BY_ID = index([AGENT_TOKEN])
 
 /**
  * The sentinel playerView.ts substitutes for a card the viewer may not see.
@@ -109,6 +110,14 @@ export const getModel = (id: string): ModelDef =>
 export const getFramework = (id: string): FrameworkDef =>
   get(FRAMEWORK_BY_ID, id, 'framework')
 
+/** Tokens are put into play by other cards; the Agent token owns a Context row. */
+export const getToken = (id: string): TokenDef =>
+  get(TOKEN_BY_ID, id, 'token')
+
+/** True for a token id — tokens never occupy a slot or pay a cost, so callers
+ *  must not route them through getOperatorCard. */
+export const isToken = (id: string): boolean => id in TOKEN_BY_ID
+
 /** Non-throwing existence check — used by tests and by UI code that may hold a
  *  stale id from a saved game. */
 export const hasOperatorCard = (id: string): boolean => id in OPERATOR_BY_ID
@@ -122,4 +131,5 @@ export const ALL_CARD_IDS = (): string[] => [
   ...Object.keys(LOADOUT_BY_ID),
   ...Object.keys(MODEL_BY_ID),
   ...Object.keys(FRAMEWORK_BY_ID),
+  ...Object.keys(TOKEN_BY_ID),
 ]

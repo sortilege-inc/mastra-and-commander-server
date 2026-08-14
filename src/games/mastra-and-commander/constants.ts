@@ -219,9 +219,9 @@ export const ECOSYSTEM_DISCOUNT_PIPS = 1
 // ── Loadout / models (design §4 — sizes 🟨, roles ❓Q11/Q12) ──
 
 /** BEST-GUESS(Q12): two loadout slots — a local desktop rig and a cloud. */
-export const LOADOUT_IDS = ['TEST-EQ-LOCAL-RIG', 'TEST-EQ-CLOUD'] as const
+export const LOADOUT_IDS = ['LOADOUT-SANDBOX'] as const
 /** Locked: "a starting model comes in for free". */
-export const STARTING_MODEL_ID = 'TEST-MODEL-SMALL'
+export const STARTING_MODEL_ID = 'MODEL-FABLE'
 /** BEST-GUESS(Q10): each complete server grants this much at Reveal. */
 export const SERVER_GRANT: Pip[] = ['generic']
 
@@ -232,6 +232,16 @@ export const SERVER_GRANT: Pip[] = ['generic']
 // is on you.
 
 export const FRAMEWORK_ID = 'MASTRA'
+
+/**
+ * The Agent token — the card that OWNS a Context row (owner ruling,
+ * 2026-08-13).
+ *
+ * Tokens are never drawn or bought: they come from a supply, put into play only
+ * by cards that spawn them. The round opens with one, free via Mastra; after
+ * that the only source in this set is Parallelism.
+ */
+export const AGENT_TOKEN_ID = 'TOKEN-AGENT'
 /** Trait the framework's free play applies to. */
 export const FRAMEWORK_FREE_TRAIT = 'Agent'
 
