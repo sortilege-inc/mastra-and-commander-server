@@ -1,7 +1,7 @@
 /**
  * The Context — the left→right window (design §4).
  *
- * One row per open Process. Each slot shows the card, its contributions
+ * One row per Agent in play. Each slot shows the card, its contributions
  * (the Eval currency), and its unspent outputs (which fund the next card).
  */
 import * as React from 'react'
@@ -27,7 +27,7 @@ export function ContextRow({
 }: {
   G: MCState
   canRelay: boolean
-  /** Which Process a played card lands in. */
+  /** Which Agent's row a played card lands in. */
   targetChainIx: number
   onSelectChain: (chainIx: number) => void
   onToggleRelay: (chainIx: number, slotIx: number) => void
@@ -37,7 +37,7 @@ export function ContextRow({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {G.contexts.map((chain, chainIx) => {
         // With Parallelism or a Subagent open, plays have to know WHICH window
-        // they land in. Selecting the target is done by clicking the Process
+        // they land in. Selecting the target is done by clicking the row
         // itself, so the choice lives next to the thing being chosen.
         const selectable = G.phase === 'play' && !chain.closed && G.contexts.length > 1
         const isTarget = chainIx === targetChainIx && !chain.closed
@@ -55,8 +55,8 @@ export function ContextRow({
               }}
             >
               {parent === null
-                ? `Process ${chainIx + 1}`
-                : `↳ Subagent of Process ${parent + 1}`}
+                ? `Agent ${chainIx + 1}`
+                : `↳ Agent ${chainIx + 1} — subagent of Agent ${parent + 1}`}
               {chain.closed ? ' (closed)' : ''}
               {' '}
               <span style={{ fontWeight: 400, opacity: 0.75 }}>

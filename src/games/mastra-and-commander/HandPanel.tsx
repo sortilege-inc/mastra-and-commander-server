@@ -10,6 +10,7 @@
 import * as React from 'react'
 import type { MCState } from './types'
 import { getLoadout, getOperatorCard } from './cards/registry'
+import { unimplementedNote } from './cards/unimplemented'
 import { C, btn } from './theme'
 import { CardFace } from './CardFace'
 import { TRAIT_EVENT, TRAIT_MODEL, TRAIT_RESPONSE } from './constants'
@@ -69,6 +70,14 @@ export function HandPanel({
           width={138}
           ring={pitched ? C.warn : null}
         />
+        {unimplementedNote(cardId) && (
+          <div
+            style={{ fontSize: '0.62rem', color: C.danger, marginTop: 3 }}
+            title={unimplementedNote(cardId) ?? undefined}
+          >
+            ⚠ partly wired
+          </div>
+        )}
         <div style={{
           fontSize: '0.68rem', color: pitched ? C.warn : C.dim,
           margin: '4px 0 6px', minHeight: 14,

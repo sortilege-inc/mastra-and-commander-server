@@ -8,7 +8,7 @@
  */
 import * as React from 'react'
 import type { MCState } from './types'
-import { getEvalCard, getFeatureCard } from './cards/registry'
+import { getEntropyCard, getEvalCard, getFeatureCard } from './cards/registry'
 import { contextSize, contributionsOf, matchEval } from './rules/evalHelpers'
 import { C, COLOR_SWATCH, SHAPE_GLYPH, panel } from './theme'
 import { CardBack, CardFace } from './CardFace'
@@ -103,15 +103,36 @@ export function SidePanels({ G }: { G: MCState }): React.ReactElement {
         </div>
       </Section>
 
+      {/* Threat row — Ongoing entropy that persists until answered. Drawn as
+          cards, because this is the Operator's running debt. */}
+      {G.threats.length > 0 && (
+        <Section title="THREATS — ONGOING">
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {G.threats.map((threat, i) => {
+              const def = getEntropyCard(threat.cardId)
+              return (
+                <div key={i} style={{ width: 92 }}>
+                  <CardFace cardId={threat.cardId} label={def.name} width={92} ring={C.danger} />
+                  <div style={{ fontSize: '0.66rem', color: C.danger, marginTop: 2 }}>
+                    since R{threat.since}
+                    {threat.attachedTo && ' · attached'}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </Section>
+      )}
+
       {/* Contexts + Features. The apparatus itself (servers / claw / RAG)
           now lives in the engine row, where it gets real cards. */}
       <Section title="THIS ROUND">
         <div style={{ fontSize: '0.8rem', lineHeight: 1.7 }}>
           <div>
-            Contexts {G.contexts.length}
+            Agents {G.contexts.length}
             <span style={{ color: C.dim }}>
-              {' '}(ceiling {G.contexts[0]?.ceiling ?? '—'}; {G.processLimit} process
-              {G.processLimit === 1 ? '' : 'es'})
+              {' '}({G.contexts.length === 1 ? 'one row' : 'rows'}, ceiling{' '}
+              {G.contexts[0]?.ceiling ?? '—'})
             </span>
           </div>
           <div>

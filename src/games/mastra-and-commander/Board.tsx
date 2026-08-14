@@ -4,7 +4,7 @@
  * Layout:
  *   ┌──────────────────────────────────────────┬──────────────┐
  *   │ header: round, phase stepper, advance    │              │
- *   │ Context (one row per Process)            │  SidePanels  │
+ *   │ Context (one row per Agent in play)      │  SidePanels  │
  *   │ HandPanel (rail + hand + claw hand)      │              │
  *   └──────────────────────────────────────────┴──────────────┘
  * Gate overlays render on top when a pending* field is set.
@@ -51,11 +51,11 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
   const [pitches, setPitches] = React.useState<string[]>([])
   /** Which hand card is staged as a server substrate for the next install. */
   const [substrate, setSubstrate] = React.useState<string | null>(null)
-  /** Which Process a played card lands in (Parallelism / Subagents open more). */
+  /** Which Agent's row a played card lands in (each Agent opens one). */
   const [chainChoice, setChainChoice] = React.useState(0)
 
   // Chains come and go — rollover collapses them, Subagents add them — so the
-  // stored index can outlive its Process. Clamp on read rather than tracking
+  // stored index can outlive its row. Clamp on read rather than tracking
   // every mutation; an out-of-range choice would make every play INVALID_MOVE.
   const targetChainIx = G.contexts[chainChoice] && !G.contexts[chainChoice].closed
     ? chainChoice
@@ -165,10 +165,6 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
         >
           Advance phase →
         </button>
-        {G.phase === 'play'
-          && G.contexts.filter((c) => c.parentChainIx === null).length < G.processLimit && (
-          <button style={btn()} onClick={() => moves.openProcess()}>Open Process</button>
-        )}
         {G.phase === 'entropy' && G.entropyStack.length > 0 && mode !== 'vs-ai' && (
           <button
             style={{ ...btn(), borderColor: C.danger, color: C.danger, background: C.dangerBg }}
@@ -248,7 +244,7 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
             }}
             onResponse={(cardId) => {
               // Restore-type responses need the card they are un-subverting.
-              // Aim at the first subverted slot in any Process rather than
+              // Aim at the first subverted slot in any row rather than
               // slot 0, which is rarely the damaged one.
               let chainIx = targetChainIx
               let slotIx = 0
