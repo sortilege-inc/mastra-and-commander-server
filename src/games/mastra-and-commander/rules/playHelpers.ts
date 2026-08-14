@@ -10,7 +10,7 @@ import {
   DEFAULT_ENTROPY_FEED, ECOSYSTEM_DISCOUNT_PIPS, HAND_SIZE,
 } from '../constants'
 import type { MCState } from '../types'
-import { getOperatorCard } from '../cards/registry'
+import { asPitchable, getOperatorCard } from '../cards/registry'
 import type { OperatorCardDef } from '../cards/types'
 import type { PitchAssignment } from './ioFlow'
 
@@ -151,7 +151,8 @@ export function executePitches(
   reason: string,
 ): void {
   for (const { cardId, entropy, match } of pitches) {
-    const def = getOperatorCard(cardId)
+    // May be an upgrade drawn off the operator deck, not just an operator card.
+    const def = asPitchable(cardId)
     removeFromHands(G, cardId)
     G.operatorDiscard.push(cardId)
     feedEntropy(G, entropy, `pitched ${def.name} (${match} match)`)

@@ -13,6 +13,7 @@ import type { Color, Contribution, Shape } from '../constants'
 import type { ContextSlot, EvalTier, MCState } from '../types'
 import type { EvalCardDef, EvalPattern } from '../cards/types'
 import { getOperatorCard } from '../cards/registry'
+import { threatBlanksProducersOf } from './entropyHelpers'
 
 /**
  * What one Context slot contributes.
@@ -25,6 +26,10 @@ import { getOperatorCard } from '../cards/registry'
  */
 export function slotContributions(G: MCState, slot: ContextSlot): Contribution[] {
   if (slot.subverted) return []
+
+  // A live Ongoing threat can blank a whole class of card (PII Leak: "cards
+  // that produce attention do not contribute to the current eval").
+  if (!slot.faceDown && threatBlanksProducersOf(G, slot.cardId)) return []
 
   if (slot.calls) {
     switch (slot.calls.kind) {

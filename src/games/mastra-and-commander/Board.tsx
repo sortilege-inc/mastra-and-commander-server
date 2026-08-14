@@ -267,6 +267,11 @@ export function Board(props: BoardProps<MCState>): React.ReactElement {
               clearPitches()
             }}
             onClaw={(cardId) => { moves.loadClaw(cardId); clearPitches() }}
+            onSpawnAgents={(cardId) => {
+              // Agents spawn as children of the row you are playing from.
+              moves.spawnAgents(cardId, targetChainIx)
+              clearPitches()
+            }}
             onUpgrade={(cardId) => {
               moves.upgradeModel(cardId, pitches.filter((id) => id !== cardId))
               clearPitches()

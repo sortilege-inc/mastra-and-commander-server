@@ -122,6 +122,71 @@ export const isToken = (id: string): boolean => id in TOKEN_BY_ID
  *  stale id from a saved game. */
 export const hasOperatorCard = (id: string): boolean => id in OPERATOR_BY_ID
 
+/**
+ * What KIND of card an id names.
+ *
+ * Since 2026-08-13 the operator deck holds models, loadouts and features as
+ * findable upgrades, so a card in hand is no longer necessarily an operator
+ * card — anything walking the hand must branch on this rather than assuming
+ * getOperatorCard() will succeed.
+ */
+export type CardKind =
+  | 'operator' | 'entropy' | 'eval' | 'feature'
+  | 'loadout' | 'model' | 'framework' | 'token'
+
+export function cardKindOf(id: string): CardKind | null {
+  if (id in OPERATOR_BY_ID) return 'operator'
+  if (id in ENTROPY_BY_ID) return 'entropy'
+  if (id in EVAL_BY_ID) return 'eval'
+  if (id in FEATURE_BY_ID) return 'feature'
+  if (id in LOADOUT_BY_ID) return 'loadout'
+  if (id in MODEL_BY_ID) return 'model'
+  if (id in FRAMEWORK_BY_ID) return 'framework'
+  if (id in TOKEN_BY_ID) return 'token'
+  return null
+}
+
+/** Display name for a card of ANY kind. Safe on the redaction sentinel. */
+export function cardName(id: string): string {
+  const kind = cardKindOf(id)
+  switch (kind) {
+    case 'operator': return OPERATOR_BY_ID[id]!.name
+    case 'entropy': return ENTROPY_BY_ID[id]!.name
+    case 'eval': return EVAL_BY_ID[id]!.name
+    case 'feature': return FEATURE_BY_ID[id]!.name
+    case 'loadout': return LOADOUT_BY_ID[id]!.name
+    case 'model': return MODEL_BY_ID[id]!.name
+    case 'framework': return FRAMEWORK_BY_ID[id]!.name
+    case 'token': return TOKEN_BY_ID[id]!.name
+    default: return id === HIDDEN_ID ? 'Hidden' : id
+  }
+}
+
+/**
+ * An operator-shaped view of ANY card, for paths that must accept whatever is
+ * in hand.
+ *
+ * Pitching is always legal (owner ruling), and since upgrades live in the
+ * operator deck a pitched card may be a model, loadout or feature. Those have
+ * no cost, output or Contribution, so they present as empty — which puts them
+ * on the `none` tier of the pitch price, the most expensive. That falls out of
+ * the rules rather than being a special case.
+ */
+export function asPitchable(id: string): OperatorCardDef {
+  const kind = cardKindOf(id)
+  if (kind === 'operator') return OPERATOR_BY_ID[id]!
+  return {
+    id,
+    name: cardName(id),
+    supertype: 'ephemeral',
+    traits: [],
+    consume: [],
+    produce: [],
+    contributes: [],
+    rulesText: '',
+  }
+}
+
 /** Every registered id, for integrity tests. */
 export const ALL_CARD_IDS = (): string[] => [
   ...Object.keys(OPERATOR_BY_ID),

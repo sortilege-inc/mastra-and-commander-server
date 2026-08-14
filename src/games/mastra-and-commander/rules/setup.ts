@@ -59,6 +59,7 @@ export function buildInitialState(random: RandomAPI): MCState {
     skillAttachments: [],
     frameworkFreeAgentUsed: false,
     threats: [],
+    slotted: [],
 
     // RAG is part of the initial setup — in play from turn one, unbuilt.
     rag: {

@@ -31,6 +31,8 @@ import {
 } from '../constants'
 import type { MCState, CallTarget } from '../types'
 import { getFramework, getOperatorCard } from '../cards/registry'
+import { extraFeedFor } from './entropyHelpers'
+import { asPitchable } from '../cards/registry'
 import { contributionSize } from '../cards/types'
 import {
   applyPlanToSources, chainOutputs, lastPayingSlot, planPayment, toPipCounts,
@@ -69,7 +71,9 @@ function resolvePitches(G: MCState, pitchIds: string[]) {
   const defs = []
   for (const id of pitchIds) {
     if (!G.operatorHand.includes(id) && !G.clawHand.includes(id)) return null
-    defs.push(getOperatorCard(id))
+    // Any card may be pitched, including an upgrade drawn off the operator
+    // deck — see asPitchable.
+    defs.push(asPitchable(id))
   }
   return defs
 }
@@ -143,6 +147,11 @@ export function playToContext(
   } else {
     log(G, `played ${def.name} into the Context`)
     feedEntropy(G, feedCostOf(def), `played ${def.name}`)
+    // A live Ongoing threat may tax this card entering the context (Model
+    // Collapse: "an additional entropy whenever a card that produces
+    // automation enters the context").
+    const extra = extraFeedFor(G, cardId)
+    if (extra > 0) feedEntropy(G, extra, 'Model Collapse')
   }
 
   // A Subagent opens its own context window; its cards don't count against
@@ -191,7 +200,54 @@ export function callInstalled(
   })
   log(G, `called ${describeCallTarget(G, target)} (face-down)`)
   feedEntropy(G, CALL_ENTROPY, 'call')
+
+  // A call does BOTH (owner ruling, 2026-08-13): the Contribution lands in the
+  // Context (above) AND the called card's printed `Call:` text resolves. That
+  // is what makes paying the install Entropy worth it over playing inline.
+  applyCallEffect(G, target)
+
   refillHand(G, 'call')
+}
+
+/** Resolve the printed `Call:` ability of whatever this target names. */
+function applyCallEffect(G: MCState, target: CallTarget): void {
+  const sourceId = calledCardId(G, target)
+  if (!sourceId) return
+  const def = getOperatorCard(sourceId)
+  if (!def.call) return
+
+  switch (def.call.kind) {
+    case 'drawThenDiscard': {
+      draw(G, def.call.draw, `${def.name} call`)
+      // Discard from the top of the hand — nothing in the text lets the player
+      // choose, and a gate for one card would stall the turn.
+      for (let i = 0; i < def.call.discard; i++) {
+        const discarded = G.operatorHand.shift()
+        if (discarded === undefined) break
+        G.operatorDiscard.push(discarded)
+        log(G, `${def.name} call: discarded ${getOperatorCard(discarded).name}`)
+      }
+      break
+    }
+    case 'gainPips':
+      for (const pip of def.call.pips) G.roundPool[pip] += 1
+      log(G, `${def.name} call: gained ${def.call.pips.join(' ')}`)
+      break
+  }
+}
+
+/** The card whose printed text a call resolves, or null for RAG (no card). */
+function calledCardId(G: MCState, target: CallTarget): string | null {
+  switch (target.kind) {
+    case 'server':
+      return findServer(G, target.serverId)?.traitCardId ?? null
+    case 'skill':
+      return G.skillAttachments.find((a) => a.loadoutId === target.loadoutId)
+        ?.skillCardId ?? null
+    case 'rag':
+      // RAG's payload is a Contribution, not a card with printed text.
+      return null
+  }
 }
 
 /** Is this call target actually installed and usable? */

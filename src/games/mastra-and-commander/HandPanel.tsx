@@ -9,7 +9,7 @@
  */
 import * as React from 'react'
 import type { MCState } from './types'
-import { getLoadout, getOperatorCard } from './cards/registry'
+import { cardKindOf, cardName, getLoadout, getOperatorCard } from './cards/registry'
 import { unimplementedNote } from './cards/unimplemented'
 import { C, btn } from './theme'
 import { CardFace } from './CardFace'
@@ -18,7 +18,8 @@ import type { CallTarget } from './types'
 
 export function HandPanel({
   G, selectedPitches, callTargets, onTogglePitch, onPlay, onEvent, onResponse,
-  onCall, onAttachSkill, onClaw, onUpgrade, onInstallTool, onStageSubstrate,
+  onCall, onAttachSkill, onClaw, onSpawnAgents, onUpgrade, onInstallTool,
+  onStageSubstrate,
 }: {
   G: MCState
   selectedPitches: string[]
@@ -30,6 +31,8 @@ export function HandPanel({
   onCall: (cardId: string, target: CallTarget) => void
   onAttachSkill: (cardId: string, loadoutId: string) => void
   onClaw: (cardId: string) => void
+  /** Play a Feature that puts Agents into play. */
+  onSpawnAgents: (cardId: string) => void
   onUpgrade: (cardId: string) => void
   /** Install this Tool onto the staged face-down substrate. */
   onInstallTool: (cardId: string) => void
@@ -43,13 +46,18 @@ export function HandPanel({
     (id) => !G.skillAttachments.some((a) => a.loadoutId === id))
 
   const renderCard = (cardId: string, ix: number, fromClaw: boolean) => {
-    const def = getOperatorCard(cardId)
+    // The operator deck now carries upgrades too (models / loadouts /
+    // features), so a card in hand is NOT necessarily an operator card.
+    const kind = cardKindOf(cardId)
+    const def = kind === 'operator' ? getOperatorCard(cardId) : null
     const pitched = selectedPitches.includes(cardId)
-    const isEvent = def.traits.includes(TRAIT_EVENT)
-    const isResponse = def.traits.includes(TRAIT_RESPONSE)
-    const isModel = def.traits.includes(TRAIT_MODEL)
-    const isTool = def.traits.includes('Tool') || def.traits.includes('MCP')
-    const isSkill = def.traits.includes('Skill')
+    const traits = def?.traits ?? []
+    const isEvent = traits.includes(TRAIT_EVENT)
+    const isResponse = traits.includes(TRAIT_RESPONSE)
+    const isModel = traits.includes(TRAIT_MODEL)
+    const isTool = traits.includes('Tool') || traits.includes('MCP')
+    const isSkill = traits.includes('Skill')
+    const isFeature = kind === 'feature'
 
     return (
       <div
@@ -66,7 +74,7 @@ export function HandPanel({
             the rails and rules text at a legible size. */}
         <CardFace
           cardId={cardId}
-          label={def.name}
+          label={cardName(cardId)}
           width={138}
           ring={pitched ? C.warn : null}
         />
@@ -84,9 +92,14 @@ export function HandPanel({
         }}>
           {pitched ? 'marked to pitch' : ''}
           {fromClaw ? (pitched ? ' · claw' : 'claw') : ''}
-          {(def.keywords ?? []).length > 0 && (
+          {(def?.keywords ?? []).length > 0 && (
             <span style={{ color: C.accent }}>
-              {(pitched || fromClaw ? ' · ' : '') + (def.keywords ?? []).join(' ')}
+              {(pitched || fromClaw ? ' · ' : '') + (def?.keywords ?? []).join(' ')}
+            </span>
+          )}
+          {kind !== null && kind !== 'operator' && (
+            <span style={{ color: C.accent }}>
+              {(pitched || fromClaw ? ' · ' : '') + kind}
             </span>
           )}
         </div>
@@ -95,8 +108,18 @@ export function HandPanel({
           <button style={btn(inPlay || inResponse)} onClick={() => onTogglePitch(cardId)}>
             {pitched ? '− pitch' : '+ pitch'}
           </button>
-          {inPlay && !isEvent && !isResponse && (
+          {inPlay && kind === 'operator' && !isEvent && !isResponse && (
             <button style={btn()} onClick={() => onPlay(cardId)}>play</button>
+          )}
+          {/* A Feature that spawns Agents opens rows rather than joining one. */}
+          {inPlay && isFeature && (
+            <button
+              style={btn()}
+              onClick={() => onSpawnAgents(cardId)}
+              title="Spawn Agents — each opens its own context row"
+            >
+              spawn
+            </button>
           )}
           {inPlay && isEvent && (
             <button style={btn()} onClick={() => onEvent(cardId)}>event</button>

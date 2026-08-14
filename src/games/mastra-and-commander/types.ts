@@ -189,6 +189,9 @@ export interface MCState {
   frameworkFreeAgentUsed: boolean
   /** Resolved Entropy cards that persist and keep applying (see ActiveThreat). */
   threats: ActiveThreat[]
+  /** Entropy cards diverted into a Loadout's Slot — inert while held
+   *  ("its text box is blank"). */
+  slotted: Array<{ loadoutId: string; cardId: string }>
 
   // ── RAG — the setup saga ────────────────────────────────────────────────
   rag: RagTrack

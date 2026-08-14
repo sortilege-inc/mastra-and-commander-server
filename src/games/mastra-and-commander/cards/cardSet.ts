@@ -217,8 +217,7 @@ export const LOADOUT_CARDS: LoadoutDef[] = [
     traits: ['Loadout'],
     grants: [],
     activated: { cost: { pips: ['capital', 'attention'] }, gain: ['technology'], mill: 1 },
-    // NOT WIRED YET: diverting a resolving Entropy into the slot.
-    slot: { capacity: 1, unimplemented: true },
+    slot: { capacity: 1 },
     rulesText: '{value}{attention}: Discard the top card of your operator deck. '
       + 'Gain {automation}.\n\n**Slot:** This card can hold 1 Entropy. While a card is '
       + 'held here its text box is blank.',
