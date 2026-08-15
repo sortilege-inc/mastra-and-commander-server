@@ -12,12 +12,12 @@
  */
 import type {
   FrameworkDef, EntropyCardDef, LoadoutDef, EvalCardDef, FeatureCardDef,
-  ModelDef, OperatorCardDef,
+  ModelDef, OperatorCardDef, TokenDef,
 } from './types'
 import {
-  ENTROPY_CARDS, LOADOUT, EVAL_CARDS, FEATURE_CARDS, MODELS, OPERATOR_CARDS,
-  MASTRA_FRAMEWORK,
-} from './testSet'
+  AGENT_TOKEN, ENTROPY_CARDS, EVAL_CARDS, FEATURE_CARDS, LOADOUT_CARDS,
+  MASTRA, MODEL_CARDS, OPERATOR_CARDS, STUB_CARDS,
+} from './cardSet'
 
 function index<T extends { id: string }>(defs: T[]): Record<string, T> {
   const map: Record<string, T> = {}
@@ -28,13 +28,15 @@ function index<T extends { id: string }>(defs: T[]): Record<string, T> {
   return map
 }
 
-const OPERATOR_BY_ID = index(OPERATOR_CARDS)
+// Stubs are registered (so their ids and art resolve) but are not dealt.
+const OPERATOR_BY_ID = index([...OPERATOR_CARDS, ...STUB_CARDS])
 const ENTROPY_BY_ID = index(ENTROPY_CARDS)
 const EVAL_BY_ID = index(EVAL_CARDS)
 const FEATURE_BY_ID = index(FEATURE_CARDS)
-const LOADOUT_BY_ID = index(LOADOUT)
-const MODEL_BY_ID = index(MODELS)
-const FRAMEWORK_BY_ID = index([MASTRA_FRAMEWORK])
+const LOADOUT_BY_ID = index(LOADOUT_CARDS)
+const MODEL_BY_ID = index(MODEL_CARDS)
+const FRAMEWORK_BY_ID = index([MASTRA])
+const TOKEN_BY_ID = index([AGENT_TOKEN])
 
 /**
  * The sentinel playerView.ts substitutes for a card the viewer may not see.
@@ -63,7 +65,7 @@ const HIDDEN_DEFS: Record<string, unknown> = {
     effect: { kind: 'none' }, rulesText: '',
   } satisfies EntropyCardDef,
   eval: {
-    id: HIDDEN_ID, name: 'Hidden objective', patterns: [], par: 0,
+    id: HIDDEN_ID, name: 'Hidden objective', hand: [], patterns: [], par: 0,
     difficulty: 1, rulesText: '',
   } satisfies EvalCardDef,
   feature: {
@@ -109,9 +111,82 @@ export const getModel = (id: string): ModelDef =>
 export const getFramework = (id: string): FrameworkDef =>
   get(FRAMEWORK_BY_ID, id, 'framework')
 
+/** Tokens are put into play by other cards; the Agent token owns a Context row. */
+export const getToken = (id: string): TokenDef =>
+  get(TOKEN_BY_ID, id, 'token')
+
+/** True for a token id — tokens never occupy a slot or pay a cost, so callers
+ *  must not route them through getOperatorCard. */
+export const isToken = (id: string): boolean => id in TOKEN_BY_ID
+
 /** Non-throwing existence check — used by tests and by UI code that may hold a
  *  stale id from a saved game. */
 export const hasOperatorCard = (id: string): boolean => id in OPERATOR_BY_ID
+
+/**
+ * What KIND of card an id names.
+ *
+ * Since 2026-08-13 the operator deck holds models, loadouts and features as
+ * findable upgrades, so a card in hand is no longer necessarily an operator
+ * card — anything walking the hand must branch on this rather than assuming
+ * getOperatorCard() will succeed.
+ */
+export type CardKind =
+  | 'operator' | 'entropy' | 'eval' | 'feature'
+  | 'loadout' | 'model' | 'framework' | 'token'
+
+export function cardKindOf(id: string): CardKind | null {
+  if (id in OPERATOR_BY_ID) return 'operator'
+  if (id in ENTROPY_BY_ID) return 'entropy'
+  if (id in EVAL_BY_ID) return 'eval'
+  if (id in FEATURE_BY_ID) return 'feature'
+  if (id in LOADOUT_BY_ID) return 'loadout'
+  if (id in MODEL_BY_ID) return 'model'
+  if (id in FRAMEWORK_BY_ID) return 'framework'
+  if (id in TOKEN_BY_ID) return 'token'
+  return null
+}
+
+/** Display name for a card of ANY kind. Safe on the redaction sentinel. */
+export function cardName(id: string): string {
+  const kind = cardKindOf(id)
+  switch (kind) {
+    case 'operator': return OPERATOR_BY_ID[id]!.name
+    case 'entropy': return ENTROPY_BY_ID[id]!.name
+    case 'eval': return EVAL_BY_ID[id]!.name
+    case 'feature': return FEATURE_BY_ID[id]!.name
+    case 'loadout': return LOADOUT_BY_ID[id]!.name
+    case 'model': return MODEL_BY_ID[id]!.name
+    case 'framework': return FRAMEWORK_BY_ID[id]!.name
+    case 'token': return TOKEN_BY_ID[id]!.name
+    default: return id === HIDDEN_ID ? 'Hidden' : id
+  }
+}
+
+/**
+ * An operator-shaped view of ANY card, for paths that must accept whatever is
+ * in hand.
+ *
+ * Pitching is always legal (owner ruling), and since upgrades live in the
+ * operator deck a pitched card may be a model, loadout or feature. Those have
+ * no cost, output or Contribution, so they present as empty — which puts them
+ * on the `none` tier of the pitch price, the most expensive. That falls out of
+ * the rules rather than being a special case.
+ */
+export function asPitchable(id: string): OperatorCardDef {
+  const kind = cardKindOf(id)
+  if (kind === 'operator') return OPERATOR_BY_ID[id]!
+  return {
+    id,
+    name: cardName(id),
+    supertype: 'ephemeral',
+    traits: [],
+    consume: [],
+    produce: [],
+    contributes: [],
+    rulesText: '',
+  }
+}
 
 /** Every registered id, for integrity tests. */
 export const ALL_CARD_IDS = (): string[] => [
@@ -122,4 +197,5 @@ export const ALL_CARD_IDS = (): string[] => [
   ...Object.keys(LOADOUT_BY_ID),
   ...Object.keys(MODEL_BY_ID),
   ...Object.keys(FRAMEWORK_BY_ID),
+  ...Object.keys(TOKEN_BY_ID),
 ]

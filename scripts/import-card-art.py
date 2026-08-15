@@ -33,17 +33,20 @@ BACK_WIDTH = 400   # never shown large
 QUALITY = 82
 
 # cards.yml order -> engine card id (src/games/mastra-and-commander/cards/cardSet.ts).
-# The first playable 15-card set (owner's rules pass, 2026-08-13).
+# The first playable set (owner's rules pass, 2026-08-13; 18 cards after the
+# Sam-feedback batch: renames, Algorithmic Intervention, and two stubs).
 ORDERED_IDS = [
     'MASTRA',
-    'OP-AGENTBROWSER', 'OP-SOCIAL-MEDIA-MANAGER', 'OP-HUMAN-IN-THE-LOOP',
-    'OP-Y-COMBINATOR',
-    'FEAT-PARALLELISM',
-    'EN-TOKEN-LIMITER', 'EN-PII-LEAK', 'EN-JAILBREAK', 'EN-MODEL-COLLAPSE',
+    'OP-BROWSERBASE', 'OP-SOCIAL-MEDIA-MANAGER', 'OP-HUMAN-IN-THE-LOOP',
+    'OP-YC',
+    'FEAT-PARALLEL-SUBAGENTS',
+    'EN-TOKEN-LIMITER', 'EN-PII-LEAK', 'EN-JAILBREAK',
+    'EN-ALGORITHMIC-INTERVENTION', 'EN-MODEL-COLLAPSE',
     'EV-PERSONAL-TECH-SUPPORT', 'EV-RECRUITER-AGENT',
     'MODEL-FABLE',
     'LOADOUT-SANDBOX',
     'TOKEN-AGENT',
+    'OP-DARIOS-AI-DOOM', 'OP-THEO-RANT',
 ]
 
 BACKS = {'back_operator.png': 'back-operator', 'back_entropy.png': 'back-entropy'}

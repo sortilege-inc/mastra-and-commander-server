@@ -8,9 +8,10 @@
  * server and scored its Contribution instead. Servers now carry a stable id.
  */
 import { describe, expect, it } from 'vitest'
-import { emptyGameState, placeCall } from '../testing/fixtures'
+import { emptyGameState, placeCall, CARDS } from '../testing/fixtures'
 import { describeCallTarget } from './playMoves'
 import { slotContributions } from './evalHelpers'
+import { getOperatorCard } from '../cards/registry'
 import { applyEntropyEffect } from './entropyHelpers'
 
 /** Two installed servers, so index-shifting bugs have room to show. */
@@ -19,14 +20,14 @@ function withTwoServers() {
   G.servers = [
     {
       id: 'srv-1',
-      substrateCardId: 'TEST-OP-SCRATCHPAD',
-      traitCardId: 'TEST-OP-MCP-FILESYSTEM',
+      substrateCardId: CARDS.cheap,
+      traitCardId: CARDS.installable,
       disabled: false,
     },
     {
       id: 'srv-2',
-      substrateCardId: 'TEST-OP-SCRATCHPAD',
-      traitCardId: 'TEST-OP-TOOL-WEBSEARCH',
+      substrateCardId: CARDS.cheap,
+      traitCardId: CARDS.response,
       disabled: false,
     },
   ]
@@ -36,19 +37,19 @@ function withTwoServers() {
 describe('server identity survives destruction', () => {
   it('names a call by the server it actually invoked', () => {
     const G = withTwoServers()
-    placeCall(G, 'TEST-OP-AGENT', { kind: 'server', serverId: 'srv-2' })
+    placeCall(G, CARDS.cheap, { kind: 'server', serverId: 'srv-2' })
     expect(describeCallTarget(G, { kind: 'server', serverId: 'srv-2' }))
-      .toBe('Web Search Tool')
+      .toBe(getOperatorCard(CARDS.response).name)
   })
 
   it('does not crash when the called server has been destroyed', () => {
     const G = withTwoServers()
-    placeCall(G, 'TEST-OP-AGENT', { kind: 'server', serverId: 'srv-1' })
+    placeCall(G, CARDS.cheap, { kind: 'server', serverId: 'srv-1' })
 
     applyEntropyEffect(
       G,
       { kind: 'attackServer' },
-      { kind: 'server', serverId: 'srv-1', label: 'Filesystem MCP' },
+      { kind: 'server', serverId: 'srv-1', label: 'x' },
       () => 0,
     )
 
@@ -63,18 +64,18 @@ describe('server identity survives destruction', () => {
     const G = withTwoServers()
     // Call the SECOND server, then destroy the FIRST. Under index addressing
     // the survivor shifted to index 0 and this call silently re-pointed.
-    placeCall(G, 'TEST-OP-AGENT', { kind: 'server', serverId: 'srv-2' })
+    placeCall(G, CARDS.cheap, { kind: 'server', serverId: 'srv-2' })
 
     applyEntropyEffect(
       G,
       { kind: 'attackServer' },
-      { kind: 'server', serverId: 'srv-1', label: 'Filesystem MCP' },
+      { kind: 'server', serverId: 'srv-1', label: 'x' },
       () => 0,
     )
 
     expect(describeCallTarget(G, { kind: 'server', serverId: 'srv-2' }))
-      .toBe('Web Search Tool')
+      .toBe(getOperatorCard(CARDS.response).name)
     expect(slotContributions(G, G.contexts[0]!.slots[0]!))
-      .toEqual([{ color: 'amber', shape: 'circle' }])
+      .toEqual(getOperatorCard(CARDS.response).contributes)
   })
 })

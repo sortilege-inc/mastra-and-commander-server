@@ -7,11 +7,15 @@
 - The framework layer is **ported from [tcggg](https://github.com/sortilege-inc/tcggg)**
   (the sister multi-game play engine). It is multi-game by design: framework
   code is game-agnostic; each game lives in its own subdirectory.
-- Current state is a **playable first pass**: the full round loop runs with the
-  pitch economy, Context I/O chain, Entropy stack + all three wrench vectors,
-  Eval scoring on the success ladder, and every subsystem (RAG, Claw, servers,
-  Features, Models, equipment, Processes, ecosystems). A TicTacToe placeholder
-  remains as a wiring baseline. Cards are synthetic `TEST-` placeholders.
+- Current state: the round loop runs end to end on the owner's **first playable
+  card set** (2026-08-13, 18 cards). Play happens in **contexts**: each context
+  is opened and owned by an **Agent token**, the round's first Agent is free via
+  Mastra, and every further Agent opens its own context nested under the one it
+  came from. *Process is retired.* A TicTacToe placeholder remains as a wiring
+  baseline. **Say "context"** — never "row" or "agent-owned row".
+- Card payloads the engine cannot act on yet carry an `unimplemented` flag and
+  are surfaced on the board. **Never silently omit or fake a printed mechanic** —
+  a half-built card must not pass for a working one.
 
 The **card content, rules design, and printed frames** live in the sibling
 repo `../mastra-and-commander/` (Lens frame + Squib pipeline + `cards/`). This

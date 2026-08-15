@@ -29,11 +29,14 @@ import { advancePhase } from './rules/phaseMoves'
 import { pickFeature, skipFeaturePicks } from './rules/revealMoves'
 import {
   advanceRag, attachSkill, callInstalled, closeProcess, installServer, loadClaw,
-  openProcess, playEvent, playToContext, upgradeModel,
+  playEvent, playToContext, upgradeModel,
 } from './rules/playMoves'
 import {
   autoResolveEntropyTarget, chooseEntropyTarget, resolveNextEntropy,
 } from './rules/entropyMoves'
+import {
+  divertToSlot, spawnAgents, tutorUpgrade, useLoadoutAbility, useModelAbility,
+} from './rules/agentMoves'
 import { playResponse } from './rules/responseMoves'
 import { acceptOutcome, scrapForEntropy, toggleRelay } from './rules/evalMoves'
 
@@ -84,13 +87,22 @@ export const MastraCommander: Game<MCState> = {
     advanceRag,
     loadClaw,
     upgradeModel,
-    openProcess,
     closeProcess,
+    /** Parallelism: put Agents into play, each opening its own row. */
+    spawnAgents,
+    /** Fable's `Entropy 1:` — an ability whose cost is Entropy. */
+    useModelAbility,
+    /** Sandbox's printed activated ability. */
+    useLoadoutAbility,
+    /** Y-Combinator: search the operator deck for an upgrade. */
+    tutorUpgrade,
 
     // ── Phase 3 · Entropy — see rules/entropyMoves.ts ──────────────────
     resolveNextEntropy,
     chooseEntropyTarget,
     autoResolveEntropyTarget,
+    /** Sandbox's Slot: hold a resolving Entropy card inert instead. */
+    divertToSlot,
 
     // ── Phase 4 · Response — see rules/responseMoves.ts ────────────────
     playResponse,

@@ -12,7 +12,8 @@ import { SHAPES } from '../constants'
 import type { Color, Contribution, Shape } from '../constants'
 import type { ContextSlot, EvalTier, MCState } from '../types'
 import type { EvalCardDef, EvalPattern } from '../cards/types'
-import { getOperatorCard } from '../cards/registry'
+import { getEvalCard, getOperatorCard } from '../cards/registry'
+import { threatBlanksProducersOf } from './entropyHelpers'
 
 /**
  * What one Context slot contributes.
@@ -25,6 +26,10 @@ import { getOperatorCard } from '../cards/registry'
  */
 export function slotContributions(G: MCState, slot: ContextSlot): Contribution[] {
   if (slot.subverted) return []
+
+  // A live Ongoing threat can blank a whole class of card (PII Leak: "cards
+  // that produce attention do not contribute to the current eval").
+  if (!slot.faceDown && threatBlanksProducersOf(G, slot.cardId)) return []
 
   if (slot.calls) {
     switch (slot.calls.kind) {
@@ -156,3 +161,51 @@ export function scoreTier(
 /** Did this tier count as passing the eval? (`lesser` is a sloppy pass, not a
  *  loss — design §4: loss is "failing to match the eval".) */
 export const isPass = (tier: EvalTier): boolean => tier !== 'failure'
+
+/**
+ * How many printed hand marks two Objectives differ by.
+ *
+ * Algorithmic Intervention replaces the eval with one "differing by no more
+ * than two elements", so the comparison is over the printed hand tokens as a
+ * MULTISET: match identical marks off against each other, and everything left
+ * on either side counts. Two hands of different length therefore differ by at
+ * least that length gap, which is the intuitive reading.
+ */
+export function handDifference(a: string[], b: string[]): number {
+  const remaining = [...b]
+  let matched = 0
+  for (const token of a) {
+    const ix = remaining.indexOf(token)
+    if (ix !== -1) {
+      remaining.splice(ix, 1)
+      matched++
+    }
+  }
+  return (a.length - matched) + (b.length - matched)
+}
+
+/**
+ * The nearest Objective in the deck within `maxDifference` marks of the current
+ * one, or null if none qualifies.
+ *
+ * Ties break on deck order, which is already shuffled — deterministic for
+ * replay without needing the RNG.
+ */
+export function nearestEval(
+  G: MCState,
+  maxDifference: number,
+): string | null {
+  if (!G.currentEvalId) return null
+  const current = getEvalCard(G.currentEvalId).hand
+
+  let best: string | null = null
+  let bestDiff = Infinity
+  for (const id of G.evalDeck) {
+    const diff = handDifference(current, getEvalCard(id).hand)
+    if (diff <= maxDifference && diff < bestDiff) {
+      best = id
+      bestDiff = diff
+    }
+  }
+  return best
+}

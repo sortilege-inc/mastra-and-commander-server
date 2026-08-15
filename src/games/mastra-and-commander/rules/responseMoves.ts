@@ -5,7 +5,7 @@
  * A response is still Operator activity, so it still feeds the Entropy economy.
  */
 import { INVALID_MOVE } from 'boardgame.io/core'
-import { OPERATOR_SEAT, TRAIT_RESPONSE } from '../constants'
+import { OPERATOR_SEAT } from '../constants'
 import type { MCState } from '../types'
 import { getOperatorCard } from '../cards/registry'
 import { applyPlanToSources, planPayment, toPipCounts } from './ioFlow'
@@ -38,7 +38,8 @@ export function playResponse(
   if (!G.operatorHand.includes(cardId) && !G.clawHand.includes(cardId)) return INVALID_MOVE
 
   const def = getOperatorCard(cardId)
-  if (!def.traits.includes(TRAIT_RESPONSE) || !def.response) return INVALID_MOVE
+  // It is a Response because it HAS a response ability, not by label.
+  if (!def.response) return INVALID_MOVE
 
   const pitchDefs = []
   for (const id of pitchIds) {

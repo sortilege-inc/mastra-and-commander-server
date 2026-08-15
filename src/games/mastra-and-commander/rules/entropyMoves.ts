@@ -12,6 +12,7 @@ import { ENTROPY_SEAT } from '../constants'
 import type { MCState } from '../types'
 import { getEntropyCard } from '../cards/registry'
 import { applyEntropyEffect, eligibleTargets, isTargeted } from './entropyHelpers'
+import { refreshCeilings } from './contextRows'
 import type { EntropyTarget } from './entropyHelpers'
 import { draw, log } from './playHelpers'
 import type { MoveCtx } from './playMoves'
@@ -59,7 +60,7 @@ export function resolveNextEntropy({ G, playerID, random }: MoveCtx) {
     applyEntropyEffect(G, def.effect, null, randomIndexFrom(random))
   }
 
-  G.entropyResolved.push(cardId)
+  retainOrDiscard(G, cardId)
   // Locked (design §2): "The Operator draws one card per Entropy resolved."
   draw(G, 1, 'Entropy resolved')
 }
@@ -90,7 +91,7 @@ export function chooseEntropyTarget({ G, playerID, random }: MoveCtx, target: En
 
   applyEntropyEffect(G, def.effect, chosen, randomIndexFrom(random))
   G.pendingEntropyTarget = null
-  G.entropyResolved.push(gate.entropyCardId)
+  retainOrDiscard(G, gate.entropyCardId)
   draw(G, 1, 'Entropy resolved')
 }
 
@@ -112,6 +113,31 @@ export function autoResolveEntropyTarget({ G, playerID, random }: MoveCtx) {
 
   applyEntropyEffect(G, def.effect, chosen, randomIndexFrom(random))
   G.pendingEntropyTarget = null
-  G.entropyResolved.push(gate.entropyCardId)
+  retainOrDiscard(G, gate.entropyCardId)
   draw(G, 1, 'Entropy resolved')
+}
+
+/**
+ * Where a resolved Entropy card goes.
+ *
+ * Cards printing `Ongoing:` or `Initialize:` PERSIST (owner ruling,
+ * 2026-08-13): they move to the threat row and keep applying until a Trigger
+ * clears them. Everything else behaves as before — resolved, then set aside for
+ * the round's end-of-round accounting.
+ */
+export function retainOrDiscard(G: MCState, cardId: string): void {
+  const effect = getEntropyCard(cardId).effect
+  if (effect.kind === 'ongoing' || effect.kind === 'initialize') {
+    G.threats.push({
+      cardId,
+      since: G.round,
+      triggerProgress: 0,
+      attachedTo: null,
+    })
+    log(G, `${getEntropyCard(cardId).name} persists on the threat row`)
+    // A ceiling-reducing threat changes every row immediately.
+    refreshCeilings(G)
+    return
+  }
+  G.entropyResolved.push(cardId)
 }

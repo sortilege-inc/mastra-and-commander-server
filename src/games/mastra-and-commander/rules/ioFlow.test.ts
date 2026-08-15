@@ -1,219 +1,191 @@
 /**
- * The payment algebra — design §4's pitch economy.
+ * The payment algebra — the provisional-I/O quarantine's unit tests.
  *
- * These are the rules most likely to change (the owner flagged the I/O flow as
- * provisional), so they get the densest coverage: when the flow is reworked,
- * these tests are the spec that has to be rewritten alongside it.
+ * These drive `planPayment` with hand-built pip lists rather than real cards
+ * wherever the maths is the subject: the algebra is what is under test, and
+ * tying it to a card's printed cost would make an unrelated balance tweak break
+ * these. Real cards appear only where the PITCH PRICE is the subject, since
+ * that is set by comparing printed Contributions.
  */
 import { describe, expect, it } from 'vitest'
 import {
-  lastPayingSlot, pitchEntropyFor, planPayment, toPipCounts, totalPips, zeroPips,
+  applyPlanToSources, chainOutputs, lastPayingSlot, pitchEntropyFor, planPayment,
+  toPipCounts, totalPips, zeroPips,
 } from './ioFlow'
+import type { PaymentPlan } from './ioFlow'
 import { getOperatorCard } from '../cards/registry'
+import { CARDS } from '../testing/fixtures'
+import { PITCH_ENTROPY } from '../constants'
+import type { Pip } from '../constants'
 
+const pips = (...list: Pip[]) => toPipCounts(list)
 const noSources = () => ({ prevOutputs: zeroPips(), roundPool: zeroPips() })
 
-describe('toPipCounts', () => {
-  it('counts a pip list', () => {
-    const counts = toPipCounts(['capital', 'capital', 'generic'])
-    expect(counts.capital).toBe(2)
-    expect(counts.generic).toBe(1)
-    expect(totalPips(counts)).toBe(3)
-  })
-})
+/** planPayment, asserting it succeeded. */
+function plan(
+  cost: Pip[],
+  sources = noSources(),
+  pitchIds: string[] = [],
+  payingFor: string | null = null,
+): PaymentPlan {
+  const result = planPayment(
+    cost,
+    sources,
+    pitchIds.map(getOperatorCard),
+    payingFor ? getOperatorCard(payingFor) : null,
+  )
+  if (!result.ok) throw new Error(`expected a payable plan, got: ${result.reason}`)
+  return result.plan
+}
 
-describe('pitchEntropyFor — the 1/2/3 contribution scale', () => {
-  // Agent contributes cyan ●; Subagent cyan ▲; Workflow-A amber ●;
-  // Durable Agent green ⬟.
-  const agent = getOperatorCard('TEST-OP-AGENT')
-
-  it('charges 1 for an exact match (same color AND shape)', () => {
-    const result = pitchEntropyFor(agent, agent)
-    expect(result.match).toBe('exact')
-    expect(result.entropy).toBe(1)
-  })
-
-  it('charges 2 for a color-only match', () => {
-    const result = pitchEntropyFor(getOperatorCard('TEST-OP-SUBAGENT'), agent)
-    expect(result.match).toBe('partial')
-    expect(result.entropy).toBe(2)
-  })
-
-  it('charges 2 for a shape-only match', () => {
-    const result = pitchEntropyFor(getOperatorCard('TEST-OP-WORKFLOW-A'), agent)
-    expect(result.match).toBe('partial')
-    expect(result.entropy).toBe(2)
+describe('paying from sources', () => {
+  it('costs nothing when the cost is empty', () => {
+    const p = plan([])
+    expect(totalPips(p.fromPrevOutputs)).toBe(0)
+    expect(totalPips(p.fromRoundPool)).toBe(0)
+    expect(p.pitches).toEqual([])
   })
 
-  it('charges 3 when neither matches', () => {
-    const result = pitchEntropyFor(getOperatorCard('TEST-OP-DURABLE-AGENT'), agent)
-    expect(result.match).toBe('none')
-    expect(result.entropy).toBe(3)
-  })
-
-  it('takes the BEST match across multi-contribution cards', () => {
-    // Supervisor contributes cyan ■ AND cyan ● — the latter matches Agent
-    // exactly, so it should be priced as exact, not partial.
-    const result = pitchEntropyFor(getOperatorCard('TEST-OP-SUPERVISOR'), agent)
-    expect(result.match).toBe('exact')
-  })
-
-  it('falls to the `none` tier with nothing to compare against', () => {
-    expect(pitchEntropyFor(agent, null).match).toBe('none')
-  })
-})
-
-describe('planPayment — free cards', () => {
-  it('pays an empty cost with nothing', () => {
-    const result = planPayment([], noSources(), [])
-    expect(result.ok).toBe(true)
-  })
-
-  it('rejects surplus pitches for a free card', () => {
-    const result = planPayment([], noSources(), [getOperatorCard('TEST-OP-AGENT')])
-    expect(result.ok).toBe(false)
-  })
-})
-
-describe('planPayment — paying from the previous card outputs', () => {
   it('spends the previous card outputs before the round pool', () => {
-    const sources = {
-      prevOutputs: toPipCounts(['technology']),
-      roundPool: toPipCounts(['technology']),
-    }
-    const result = planPayment(['technology'], sources, [])
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.plan.fromPrevOutputs.technology).toBe(1)
-    expect(result.plan.fromRoundPool.technology).toBe(0)
+    const sources = { prevOutputs: pips('attention'), roundPool: pips('attention') }
+    const p = plan(['attention'], sources)
+    expect(p.fromPrevOutputs.attention).toBe(1)
+    expect(p.fromRoundPool.attention).toBe(0)
   })
 
-  it('falls through to the round pool when outputs run short', () => {
-    const sources = {
-      prevOutputs: toPipCounts(['technology']),
-      roundPool: toPipCounts(['technology']),
-    }
-    const result = planPayment(['technology', 'technology'], sources, [])
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.plan.fromPrevOutputs.technology).toBe(1)
-    expect(result.plan.fromRoundPool.technology).toBe(1)
+  it('falls through to the round pool once outputs run out', () => {
+    const sources = { prevOutputs: pips('attention'), roundPool: pips('attention') }
+    const p = plan(['attention', 'attention'], sources)
+    expect(p.fromPrevOutputs.attention).toBe(1)
+    expect(p.fromRoundPool.attention).toBe(1)
   })
 
-  it('lets a typed unit pay a generic pip', () => {
-    const sources = { prevOutputs: toPipCounts(['capital']), roundPool: zeroPips() }
-    const result = planPayment(['generic'], sources, [])
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.plan.fromPrevOutputs.capital).toBe(1)
+  it('lets a typed unit pay a wild pip', () => {
+    const sources = { prevOutputs: pips('technology'), roundPool: zeroPips() }
+    const p = plan(['generic'], sources)
+    expect(p.fromPrevOutputs.technology).toBe(1)
   })
 
-  it('does NOT let a generic unit pay a typed pip', () => {
-    const sources = { prevOutputs: toPipCounts(['generic']), roundPool: zeroPips() }
-    // No pitches offered, so the typed pip is simply unpayable.
-    const result = planPayment(['technology'], sources, [])
+  it('does NOT let a wild unit pay a typed pip', () => {
+    const sources = { prevOutputs: pips('generic'), roundPool: zeroPips() }
+    const result = planPayment(['attention'], sources, [], null)
+    // Unpayable from sources means it needs a pitch, and none was offered.
     expect(result.ok).toBe(false)
+  })
+
+  it('spends wild units on wild pips first, keeping typed units for typed pips', () => {
+    const sources = {
+      prevOutputs: pips('generic', 'attention'),
+      roundPool: zeroPips(),
+    }
+    const p = plan(['generic', 'attention'], sources)
+    expect(p.fromPrevOutputs.generic).toBe(1)
+    expect(p.fromPrevOutputs.attention).toBe(1)
   })
 })
 
-describe('planPayment — pitching', () => {
+describe('pitching', () => {
   it('requires exactly one pitch per unmet pip', () => {
-    const tooFew = planPayment(['technology', 'technology'], noSources(), [
-      getOperatorCard('TEST-OP-AGENT'),
-    ])
+    const tooFew = planPayment(['attention', 'attention'], noSources(),
+      [getOperatorCard(CARDS.cheap)], null)
     expect(tooFew.ok).toBe(false)
 
-    const exact = planPayment(['technology', 'technology'], noSources(), [
-      getOperatorCard('TEST-OP-AGENT'),
-      getOperatorCard('TEST-OP-AGENT'),
-    ])
-    expect(exact.ok).toBe(true)
+    const tooMany = planPayment(['attention'], noSources(),
+      [getOperatorCard(CARDS.cheap), getOperatorCard(CARDS.cheap)], null)
+    expect(tooMany.ok).toBe(false)
   })
 
-  it('assigns constrained typed pips before generic ones', () => {
-    // Cost is technology + generic. Only the Agent can pay technology, so the
-    // assignment must not waste it on the generic pip.
-    const result = planPayment(['technology', 'generic'], noSources(), [
-      getOperatorCard('TEST-OP-SCRATCHPAD'), // cost [] — generic only
-      getOperatorCard('TEST-OP-AGENT'),      // cost [technology]
-    ])
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.plan.pitches).toHaveLength(2)
-  })
-})
-
-describe('planPayment — pitching is always legal', () => {
-  it('accepts a card whose cost shares nothing with the pip', () => {
-    // Under the old rule this was illegal. Now it is merely priced.
-    const result = planPayment(
-      ['capital'], noSources(), [getOperatorCard('TEST-OP-AGENT')],
-      getOperatorCard('TEST-OP-AGENT'),
-    )
-    expect(result.ok).toBe(true)
+  it('accepts any card for any pip — pitching is always legal', () => {
+    // The pitched card's own cost is irrelevant; only the count matters.
+    const p = plan(['capital'], noSources(), [CARDS.cheap])
+    expect(p.pitches).toHaveLength(1)
   })
 
-  it('prices each pitch off the card being paid for', () => {
-    const agent = getOperatorCard('TEST-OP-AGENT')
-    const result = planPayment(
-      ['capital', 'capital'], noSources(),
-      [agent, getOperatorCard('TEST-OP-DURABLE-AGENT')],
-      agent,
-    )
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    // Agent vs Agent = exact (1); Durable Agent (green ⬟) vs Agent = none (3).
-    expect(result.plan.pitches.map((p) => p.entropy)).toEqual([1, 3])
+  it('prices a pitch by how its Contribution matches the card being paid for', () => {
+    // Same card on both sides: colour AND shape match, so the cheapest tier.
+    const exact = pitchEntropyFor(
+      getOperatorCard(CARDS.cheap), getOperatorCard(CARDS.cheap))
+    expect(exact.match).toBe('exact')
+    expect(exact.entropy).toBe(PITCH_ENTROPY.exact)
   })
 
-  it('still requires exactly one pitch per unmet pip', () => {
-    const result = planPayment(['technology', 'capital'], noSources(), [
-      getOperatorCard('TEST-OP-SCRATCHPAD'),
-    ])
-    expect(result.ok).toBe(false)
+  it('charges the partial tier when only one dimension matches', () => {
+    // Social Media Manager is amber/triangle; Browserbase is amber/pentagon —
+    // same colour, different shape.
+    const partial = pitchEntropyFor(
+      getOperatorCard(CARDS.cheap), getOperatorCard(CARDS.installable))
+    expect(partial.match).toBe('partial')
+    expect(partial.entropy).toBe(PITCH_ENTROPY.partial)
+  })
+
+  it('charges the most when nothing matches', () => {
+    // Human-in-the-Loop is pink/circle — shares neither with amber/triangle.
+    const none = pitchEntropyFor(
+      getOperatorCard(CARDS.cheap), getOperatorCard(CARDS.response))
+    expect(none.match).toBe('none')
+    expect(none.entropy).toBe(PITCH_ENTROPY.none)
+  })
+
+  it('charges the most when there is nothing to compare against', () => {
+    const orphan = pitchEntropyFor(getOperatorCard(CARDS.cheap), null)
+    expect(orphan.match).toBe('none')
+    expect(orphan.entropy).toBe(PITCH_ENTROPY.none)
   })
 })
 
-describe('lastPayingSlot — face-down cards are skipped for I/O', () => {
-  it('looks through a face-down call to the last face-up card', () => {
-    const slots = [
-      { faceDown: false, id: 'a' },
-      { faceDown: true, id: 'call' },
-    ]
-    expect(lastPayingSlot(slots)?.id).toBe('a')
-  })
-
-  it('returns undefined when every slot is face-down', () => {
-    expect(lastPayingSlot([{ faceDown: true, id: 'call' }])).toBeUndefined()
-  })
-
-  it('returns undefined for an empty chain', () => {
-    expect(lastPayingSlot([])).toBeUndefined()
-  })
-})
-
-describe('planPayment — ecosystem discount', () => {
-  it('waives generic pips up to the discount', () => {
-    const result = planPayment(['generic', 'generic'], noSources(), [], null, 1)
-    expect(result.ok).toBe(false) // one generic still unpaid, no pitch offered
-
-    const withPitch = planPayment(['generic', 'generic'], noSources(), [
-      getOperatorCard('TEST-OP-AGENT'),
-    ], null, 1)
-    expect(withPitch.ok).toBe(true)
-    if (!withPitch.ok) return
-    expect(withPitch.plan.discounted).toBe(1)
-  })
-
-  it('never discounts more generic pips than the cost contains', () => {
-    const result = planPayment(['generic'], noSources(), [], null, 5)
+describe('the ecosystem discount', () => {
+  it('waives wild pips, never typed ones', () => {
+    const result = planPayment(['generic', 'attention'], noSources(),
+      [getOperatorCard(CARDS.cheap)], null, 1)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.plan.discounted).toBe(1)
+    // The typed pip still needs its pitch; only the wild one was waived.
+    expect(result.plan.pitches).toHaveLength(1)
   })
 
-  it('does not discount typed pips', () => {
-    const result = planPayment(['technology'], noSources(), [], null, 3)
-    expect(result.ok).toBe(false)
+  it('cannot waive more wild pips than the cost contains', () => {
+    // A discount of 3 against a single wild pip clamps to 1 — and having
+    // waived it, the cost is fully paid with no pitch.
+    const result = planPayment(['generic'], noSources(), [], null, 3)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.plan.discounted).toBe(1)
+    expect(result.plan.pitches).toEqual([])
+  })
+})
+
+describe('applying a plan', () => {
+  it('decrements exactly what the plan spent', () => {
+    const prevOutputs = pips('attention', 'technology')
+    const roundPool = pips('attention')
+    const p = plan(['attention', 'attention'], { prevOutputs, roundPool })
+
+    applyPlanToSources(p, prevOutputs, roundPool)
+
+    expect(prevOutputs.attention).toBe(0)
+    expect(prevOutputs.technology).toBe(1) // untouched
+    expect(roundPool.attention).toBe(0)
+  })
+})
+
+describe('looking through face-down cards', () => {
+  const faceUp = (cardId: string) => ({
+    cardId, faceDown: false, calls: null,
+    outputsRemaining: pips('attention'), relayed: false, subverted: false,
+  })
+  const faceDown = (cardId: string) => ({
+    cardId, faceDown: true, calls: { kind: 'rag' as const },
+    outputsRemaining: zeroPips(), relayed: false, subverted: false,
+  })
+
+  it('funds the next card from the last FACE-UP card', () => {
+    const slots = [faceUp(CARDS.cheap), faceDown(CARDS.cheap)]
+    expect(lastPayingSlot(slots)?.faceDown).toBe(false)
+  })
+
+  it('has nothing to pay with in an empty context', () => {
+    expect(lastPayingSlot([])).toBeUndefined()
+    expect(totalPips(chainOutputs(undefined))).toBe(0)
   })
 })

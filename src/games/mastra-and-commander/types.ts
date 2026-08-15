@@ -118,6 +118,23 @@ export interface ServerInstall {
   disabled: boolean
 }
 
+/**
+ * A persistent Entropy card (owner ruling, 2026-08-13).
+ *
+ * Entropy used to resolve once and go to the discard. Cards printing
+ * `Ongoing:` instead move HERE when resolved and keep applying until their
+ * `Trigger:` clears them — so the threat row is the Operator's running debt.
+ */
+export interface ActiveThreat {
+  cardId: string
+  /** Round it landed, for the log and the UI. */
+  since: number
+  /** Progress toward this threat's Trigger, when it has one. */
+  triggerProgress: number
+  /** Set by an `initialize` effect that attached to a card in play. */
+  attachedTo: { chainIx: number; slotIx: number } | null
+}
+
 /** Where an eval landed on the success ladder (design §4). */
 export type EvalTier = 'superior' | 'best' | 'lesser' | 'failure'
 
@@ -170,6 +187,11 @@ export interface MCState {
   skillAttachments: SkillAttachment[]
   /** Set once the framework's free Agent has been used this round. */
   frameworkFreeAgentUsed: boolean
+  /** Resolved Entropy cards that persist and keep applying (see ActiveThreat). */
+  threats: ActiveThreat[]
+  /** Entropy cards diverted into a Loadout's Slot — inert while held
+   *  ("its text box is blank"). */
+  slotted: Array<{ loadoutId: string; cardId: string }>
 
   // ── RAG — the setup saga ────────────────────────────────────────────────
   rag: RagTrack

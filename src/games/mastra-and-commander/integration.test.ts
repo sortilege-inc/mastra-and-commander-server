@@ -10,6 +10,7 @@ import { Client } from 'boardgame.io/client'
 import { MastraCommander } from './Game'
 import { MATCH_ROUNDS, ROUND_PHASES } from './constants'
 import type { MCState } from './types'
+import { cardKindOf } from './cards/registry'
 
 /**
  * A plain in-process client — deliberately NOT `multiplayer: Local()`.
@@ -56,10 +57,16 @@ function playRound(client: ReturnType<typeof makeClient>): void {
   clearGates(client)                 // reveal: feature picks
   client.moves.advancePhase()        // → play
 
-  // Play whatever is affordable: a free card always is.
+  // Try to put SOMETHING in the context. The hand now holds upgrades as well
+  // as operator cards, so only operator cards are candidates, and an
+  // unaffordable one is simply rejected — this is a smoke path, not a solver.
   const G = client.getState()!.G as MCState
-  const free = G.operatorHand.find((id) => id === 'TEST-OP-SCRATCHPAD')
-  if (free) client.moves.playToContext(0, free, [])
+  for (const id of G.operatorHand) {
+    if (cardKindOf(id) !== 'operator') continue
+    client.moves.playToContext(0, id, [])
+    const after = client.getState()!.G as MCState
+    if (after.contexts.some((c) => c.slots.length > 0)) break
+  }
 
   client.moves.advancePhase()        // → entropy
   drainEntropy(client)
@@ -79,10 +86,13 @@ describe('setup through the Client', () => {
     expect(G.currentEvalId).not.toBeNull()
     expect(G.operatorHand.length).toBeGreaterThan(0)
     expect(G.frameworkId).toBe('MASTRA')
-    // The Reveal engine ran: loadout granted resources.
-    const pool = G.roundPool
-    expect(pool.capital + pool.attention + pool.technology + pool.generic)
-      .toBeGreaterThan(0)
+    // The Reveal engine ran: it opened a context with the free Agent and
+    // auto-pitched a card per loadout item. (The current loadout GRANTS no
+    // pips — Sandbox pays out through an activated ability instead — so an
+    // empty round pool here is correct, not a missing step.)
+    expect(G.contexts.length).toBeGreaterThanOrEqual(1)
+    expect(G.frameworkFreeAgentUsed).toBe(true)
+    expect(G.operatorDiscard.length).toBeGreaterThanOrEqual(G.loadout.length)
   })
 
   it('produces JSON-serializable state (bg.io log / saves / transcripts)', () => {
@@ -184,7 +194,11 @@ describe('a full match', () => {
 
     const G = client.getState()!.G as MCState
     expect(G.matchWinner).not.toBeNull()
-    expect(G.roundResults.length).toBeGreaterThanOrEqual(MATCH_ROUNDS)
+    // Either end condition is legitimate: the round limit, or cycling the
+    // operator deck. With the current small deck the latter usually lands
+    // first, which is the deck being the clock — not a bug.
+    expect(['rounds', 'deckOut']).toContain(G.matchEndReason)
+    expect(G.roundResults.length).toBeGreaterThan(0)
     // bg.io's endIf picked it up.
     expect(client.getState()!.ctx.gameover).toEqual({ winner: G.matchWinner })
   })

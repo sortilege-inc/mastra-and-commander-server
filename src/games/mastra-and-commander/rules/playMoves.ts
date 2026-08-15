@@ -3,11 +3,16 @@
  *
  * The placement rules (owner rulings, 2026-08-10) are the heart of this file:
  *
- *  - A **Tool** can be INSTALLED as an MCP server (the Tool plus a second card
+ * What a card can DO comes from what it PRINTS, never from its subhead: a card
+ * printing `MCP:` can be installed as a server, one printing `Attach:` can ride
+ * a loadout, and Events/Responses are identified by having those payloads. The
+ * subhead is flavour.
+ *
+ *  - A card printing `MCP:` can be INSTALLED as a server (it plus a second card
  *    face-down as the substrate, 2 Entropy — one per card) where it gains
  *    Durable and persists for the whole match; or played INLINE into the
  *    Context for 1 Entropy, where it does not.
- *  - A **Skill** can be ATTACHED to a loadout item (rig / cloud), gaining
+ *  - A card printing `Attach:` can be ATTACHED to a loadout item, gaining
  *    Durable; or played INLINE, where it does not.
  *  - Installed Tools, attached Skills, and a completed RAG track do NOT score
  *    on their own. You reach them by playing a card FACE-DOWN into the Context
@@ -15,10 +20,8 @@
  *    called resource's Contribution is what lands in the Context.
  *  - Face-down cards are SKIPPED for produce/consume: the chain looks through
  *    them to the last face-up card.
- *  - A **Subagent** opens its own sub-context with its own ceiling, whose cards
- *    do not count against the parent's ceiling.
- *  - The framework makes the first **Agent** each round free — no cost, no
- *    Entropy.
+ *  - Contexts are opened by Agent tokens, not by played cards (see
+ *    contextRows.ts). The framework makes the round's first Agent free.
  *
  * All moves here are Operator-only and guard on phase + open gates.
  */
@@ -26,11 +29,14 @@ import { INVALID_MOVE } from 'boardgame.io/core'
 import {
   CALL_ENTROPY, CLAW_COMPLETE_COUNT, DEFAULT_CONTEXT_CEILING, OPERATOR_SEAT,
   RAG_CHAPTERS, RAG_CLEAR_COUNT, RAG_RERANK_INDEX, RAG_UPSERT_INDEX,
-  SKILL_ATTACH_ENTROPY, TOOL_SERVER_ENTROPY, TRAIT_EVENT, TRAIT_MODEL,
-  TRAIT_SUBAGENT,
+  SKILL_ATTACH_ENTROPY, TOOL_SERVER_ENTROPY,
 } from '../constants'
 import type { MCState, CallTarget } from '../types'
-import { getFramework, getOperatorCard } from '../cards/registry'
+import {
+  asPitchable, cardKindOf, getFramework, getOperatorCard,
+} from '../cards/registry'
+import { extraFeedFor } from './entropyHelpers'
+import { MODEL_CARDS } from '../cards/cardSet'
 import { contributionSize } from '../cards/types'
 import {
   applyPlanToSources, chainOutputs, lastPayingSlot, planPayment, toPipCounts,
@@ -69,7 +75,9 @@ function resolvePitches(G: MCState, pitchIds: string[]) {
   const defs = []
   for (const id of pitchIds) {
     if (!G.operatorHand.includes(id) && !G.clawHand.includes(id)) return null
-    defs.push(getOperatorCard(id))
+    // Any card may be pitched, including an upgrade drawn off the operator
+    // deck — see asPitchable.
+    defs.push(asPitchable(id))
   }
   return defs
 }
@@ -93,9 +101,13 @@ export function playToContext(
   if (!inHand(G, cardId)) return INVALID_MOVE
 
   const chain = G.contexts[processIx]!
+  // The operator deck now carries upgrades too, so a hand card is not
+  // necessarily playable into a context. REJECT rather than throw: this move is
+  // public, and a bad id should be an invalid move, not a crashed game.
+  if (cardKindOf(cardId) !== 'operator') return INVALID_MOVE
   const def = getOperatorCard(cardId)
   // Events and Responses have their own moves/phases.
-  if (def.traits.includes(TRAIT_EVENT)) return INVALID_MOVE
+  if (def.event) return INVALID_MOVE
 
   // Framework: the first Agent each round is free — no cost, no Entropy.
   const framework = getFramework(G.frameworkId)
@@ -143,20 +155,13 @@ export function playToContext(
   } else {
     log(G, `played ${def.name} into the Context`)
     feedEntropy(G, feedCostOf(def), `played ${def.name}`)
+    // A live Ongoing threat may tax this card entering the context (Model
+    // Collapse: "an additional entropy whenever a card that produces
+    // automation enters the context").
+    const extra = extraFeedFor(G, cardId)
+    if (extra > 0) feedEntropy(G, extra, 'Model Collapse')
   }
 
-  // A Subagent opens its own context window; its cards don't count against
-  // this one's ceiling.
-  if (def.traits.includes(TRAIT_SUBAGENT)) {
-    G.contexts.push({
-      slots: [],
-      closed: false,
-      ceiling: chain.ceiling,
-      parentChainIx: processIx,
-      ownerCardId: cardId,
-    })
-    log(G, `${def.name} opened a sub-context (ceiling ${chain.ceiling})`)
-  }
 
   refillHand(G, `played ${def.name}`)
 }
@@ -191,7 +196,54 @@ export function callInstalled(
   })
   log(G, `called ${describeCallTarget(G, target)} (face-down)`)
   feedEntropy(G, CALL_ENTROPY, 'call')
+
+  // A call does BOTH (owner ruling, 2026-08-13): the Contribution lands in the
+  // Context (above) AND the called card's printed `Call:` text resolves. That
+  // is what makes paying the install Entropy worth it over playing inline.
+  applyCallEffect(G, target)
+
   refillHand(G, 'call')
+}
+
+/** Resolve the printed `Call:` ability of whatever this target names. */
+function applyCallEffect(G: MCState, target: CallTarget): void {
+  const sourceId = calledCardId(G, target)
+  if (!sourceId) return
+  const def = getOperatorCard(sourceId)
+  if (!def.call) return
+
+  switch (def.call.kind) {
+    case 'drawThenDiscard': {
+      draw(G, def.call.draw, `${def.name} call`)
+      // Discard from the top of the hand — nothing in the text lets the player
+      // choose, and a gate for one card would stall the turn.
+      for (let i = 0; i < def.call.discard; i++) {
+        const discarded = G.operatorHand.shift()
+        if (discarded === undefined) break
+        G.operatorDiscard.push(discarded)
+        log(G, `${def.name} call: discarded ${getOperatorCard(discarded).name}`)
+      }
+      break
+    }
+    case 'gainPips':
+      for (const pip of def.call.pips) G.roundPool[pip] += 1
+      log(G, `${def.name} call: gained ${def.call.pips.join(' ')}`)
+      break
+  }
+}
+
+/** The card whose printed text a call resolves, or null for RAG (no card). */
+function calledCardId(G: MCState, target: CallTarget): string | null {
+  switch (target.kind) {
+    case 'server':
+      return findServer(G, target.serverId)?.traitCardId ?? null
+    case 'skill':
+      return G.skillAttachments.find((a) => a.loadoutId === target.loadoutId)
+        ?.skillCardId ?? null
+    case 'rag':
+      // RAG's payload is a Contribution, not a card with printed text.
+      return null
+  }
 }
 
 /** Is this call target actually installed and usable? */
@@ -241,8 +293,9 @@ export function playEvent(
   if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
   if (!inHand(G, cardId)) return INVALID_MOVE
 
+  if (cardKindOf(cardId) !== 'operator') return INVALID_MOVE
   const def = getOperatorCard(cardId)
-  if (!def.traits.includes(TRAIT_EVENT) || !def.event) return INVALID_MOVE
+  if (!def.event) return INVALID_MOVE
 
   const pitchDefs = resolvePitches(G, pitchIds)
   if (!pitchDefs) return INVALID_MOVE
@@ -297,7 +350,8 @@ export function installServer(
   if (!inHand(G, substrateCardId) || !inHand(G, traitCardId)) return INVALID_MOVE
 
   const traitDef = getOperatorCard(traitCardId)
-  if (!traitDef.traits.includes('Tool') && !traitDef.traits.includes('MCP')) {
+  // It prints `MCP:` — that, not a subhead, is what makes it installable.
+  if (!traitDef.mcp) {
     return INVALID_MOVE
   }
 
@@ -347,7 +401,8 @@ export function attachSkill(
   if (G.skillAttachments.some((a) => a.loadoutId === loadoutId)) return INVALID_MOVE
 
   const def = getOperatorCard(cardId)
-  if (!def.traits.includes('Skill')) return INVALID_MOVE
+  // It prints `Attach:`.
+  if (!def.attach) return INVALID_MOVE
 
   const pitchDefs = resolvePitches(G, pitchIds)
   if (!pitchDefs) return INVALID_MOVE
@@ -486,7 +541,7 @@ export function upgradeModel(
   if (!inHand(G, cardId)) return INVALID_MOVE
 
   const def = getOperatorCard(cardId)
-  if (!def.traits.includes(TRAIT_MODEL)) return INVALID_MOVE
+  if (!MODEL_CARDS.some((m) => m.id === cardId)) return INVALID_MOVE
 
   const pitchDefs = resolvePitches(G, pitchIds)
   if (!pitchDefs) return INVALID_MOVE

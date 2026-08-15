@@ -1,208 +1,196 @@
 /**
- * Eval scoring — the poker-hand matcher and the success ladder (design §4).
+ * Eval scoring: the pattern matcher, the success ladder, and the hand
+ * comparison Algorithmic Intervention turns on.
+ *
+ * The matcher is tested against hand-built contribution lists — it is pure
+ * combinatorics over colour and shape, and pinning it to whatever the current
+ * cards happen to contribute would make a card tweak break unrelated tests.
+ * Real cards appear where card lookup is the point: what a Context slot scores.
  */
 import { describe, expect, it } from 'vitest'
-import type { Color, Contribution, Shape } from '../constants'
-import type { EvalCardDef } from '../cards/types'
 import {
-  contextSize, contributionsOf, isPass, matchEval, matchPattern, scoreTier,
+  contextSize, contributionsOf, handDifference, isPass, matchEval, matchPattern,
+  nearestEval, scoreTier, slotContributions,
 } from './evalHelpers'
-import { emptyGameState, placeCall, placeInContext } from '../testing/fixtures'
+import type { EvalCardDef } from '../cards/types'
+import type { Color, Contribution, Shape } from '../constants'
+import {
+  addContext, addThreat, emptyGameState, installServerDirect, placeCall,
+  placeInContext, CARDS,
+} from '../testing/fixtures'
+import { getEvalCard, getOperatorCard } from '../cards/registry'
 
 const c = (color: Color, shape: Shape): Contribution => ({ color, shape })
 
-describe('matchPattern — countOfColor', () => {
-  it('matches a named color reaching n', () => {
-    const contribs = [c('cyan', 'circle'), c('cyan', 'square'), c('pink', 'circle')]
+const evalOf = (patterns: EvalCardDef['patterns'], extra: Partial<EvalCardDef> = {}) => ({
+  id: 'X', name: 'X', hand: [], par: 5, difficulty: 2 as const, rulesText: '',
+  patterns, ...extra,
+})
+
+describe('pattern matching', () => {
+  it('countOfColor counts a named colour', () => {
+    const contribs = [c('cyan', 'circle'), c('cyan', 'square'), c('amber', 'circle')]
     expect(matchPattern(contribs, { kind: 'countOfColor', color: 'cyan', n: 2 })).toBe(true)
     expect(matchPattern(contribs, { kind: 'countOfColor', color: 'cyan', n: 3 })).toBe(false)
   })
 
-  it('matches any single color when no color is named', () => {
-    const contribs = [c('green', 'circle'), c('green', 'square')]
+  it('countOfColor with no colour named accepts any single colour reaching n', () => {
+    const contribs = [c('violet', 'circle'), c('violet', 'square')]
     expect(matchPattern(contribs, { kind: 'countOfColor', n: 2 })).toBe(true)
-    // Two different colors do not add up.
-    const mixed = [c('green', 'circle'), c('pink', 'square')]
-    expect(matchPattern(mixed, { kind: 'countOfColor', n: 2 })).toBe(false)
   })
-})
 
-describe('matchPattern — noColor', () => {
-  it('fails as soon as the banned color appears', () => {
+  it('noColor bans a colour outright', () => {
     expect(matchPattern([c('cyan', 'circle')], { kind: 'noColor', color: 'pink' })).toBe(true)
     expect(matchPattern([c('pink', 'circle')], { kind: 'noColor', color: 'pink' })).toBe(false)
   })
-})
 
-describe('matchPattern — runOfShapes', () => {
-  it('matches consecutive shapes in SHAPES order', () => {
-    // circle → triangle → square are consecutive.
-    const run = [c('cyan', 'circle'), c('pink', 'triangle'), c('green', 'square')]
+  it('runOfShapes wants consecutive shapes, counting presence not multiplicity', () => {
+    const run = [c('cyan', 'circle'), c('amber', 'triangle'), c('pink', 'square')]
     expect(matchPattern(run, { kind: 'runOfShapes', len: 3 })).toBe(true)
+    const gap = [c('cyan', 'circle'), c('cyan', 'circle'), c('amber', 'square')]
+    expect(matchPattern(gap, { kind: 'runOfShapes', len: 3 })).toBe(false)
   })
 
-  it('rejects a gap in the run', () => {
-    // circle, square, hexagon — triangle and pentagon missing.
-    const gapped = [c('cyan', 'circle'), c('cyan', 'square'), c('cyan', 'hexagon')]
-    expect(matchPattern(gapped, { kind: 'runOfShapes', len: 3 })).toBe(false)
-  })
-
-  it('counts presence, not multiplicity', () => {
-    const dupes = [c('cyan', 'circle'), c('pink', 'circle'), c('green', 'circle')]
-    expect(matchPattern(dupes, { kind: 'runOfShapes', len: 2 })).toBe(false)
-  })
-})
-
-describe('matchPattern — fullHouse', () => {
-  it('needs three of one color and two of another', () => {
-    const full = [
+  it('fullHouse wants three of one colour and two of another', () => {
+    const house = [
       c('cyan', 'circle'), c('cyan', 'square'), c('cyan', 'triangle'),
-      c('pink', 'circle'), c('pink', 'square'),
+      c('amber', 'circle'), c('amber', 'square'),
     ]
-    expect(matchPattern(full, { kind: 'fullHouse' })).toBe(true)
+    expect(matchPattern(house, { kind: 'fullHouse' })).toBe(true)
+    expect(matchPattern(house.slice(0, 4), { kind: 'fullHouse' })).toBe(false)
   })
 
-  it('rejects three-plus-one', () => {
-    const notFull = [
-      c('cyan', 'circle'), c('cyan', 'square'), c('cyan', 'triangle'),
-      c('pink', 'circle'),
-    ]
-    expect(matchPattern(notFull, { kind: 'fullHouse' })).toBe(false)
-  })
-})
-
-describe('matchPattern — nOfAShape / countAny / shapeAtLeast', () => {
-  it('nOfAShape counts shared shapes across colors', () => {
-    const contribs = [c('cyan', 'circle'), c('pink', 'circle')]
+  it('nOfAShape counts a repeated shape across colours', () => {
+    const contribs = [c('cyan', 'circle'), c('amber', 'circle')]
     expect(matchPattern(contribs, { kind: 'nOfAShape', n: 2 })).toBe(true)
-    expect(matchPattern(contribs, { kind: 'nOfAShape', n: 3 })).toBe(false)
   })
 
-  it('countAny counts the total', () => {
-    expect(matchPattern([c('cyan', 'circle')], { kind: 'countAny', n: 1 })).toBe(true)
-    expect(matchPattern([], { kind: 'countAny', n: 1 })).toBe(false)
-  })
-
-  it('shapeAtLeast targets one shape', () => {
-    const contribs = [c('cyan', 'hexagon'), c('pink', 'hexagon')]
-    expect(matchPattern(contribs, { kind: 'shapeAtLeast', shape: 'hexagon', n: 2 })).toBe(true)
-    expect(matchPattern(contribs, { kind: 'shapeAtLeast', shape: 'circle', n: 1 })).toBe(false)
+  it('an eval passes only when EVERY pattern holds', () => {
+    const def = evalOf([
+      { kind: 'countAny', n: 2 },
+      { kind: 'noColor', color: 'pink' },
+    ])
+    expect(matchEval([c('cyan', 'circle'), c('amber', 'circle')], def)).toBe(true)
+    expect(matchEval([c('cyan', 'circle'), c('pink', 'circle')], def)).toBe(false)
   })
 })
 
-describe('matchEval', () => {
-  const def: EvalCardDef = {
-    id: 'X', name: 'X', par: 5, difficulty: 2, rulesText: '',
-    patterns: [{ kind: 'countAny', n: 2 }, { kind: 'noColor', color: 'pink' }],
-  }
+describe('the success ladder', () => {
+  const def = evalOf([{ kind: 'countAny', n: 1 }], { par: 4, superiorAt: 3 })
+  const met = [c('cyan', 'circle')]
 
-  it('requires ALL patterns to hold', () => {
-    expect(matchEval([c('cyan', 'circle'), c('green', 'square')], def)).toBe(true)
-    // Enough contributions, but one is pink.
-    expect(matchEval([c('cyan', 'circle'), c('pink', 'square')], def)).toBe(false)
-    // No pink, but too few.
-    expect(matchEval([c('cyan', 'circle')], def)).toBe(false)
+  it('fails when the pattern is not met, however small the context', () => {
+    expect(scoreTier([], 1, def)).toBe('failure')
+  })
+
+  it('is superior within superiorAt', () => {
+    expect(scoreTier(met, 3, def)).toBe('superior')
+  })
+
+  it('is best within par', () => {
+    expect(scoreTier(met, 4, def)).toBe('best')
+  })
+
+  it('is lesser over par — a sloppy pass, still a pass', () => {
+    expect(scoreTier(met, 5, def)).toBe('lesser')
+    expect(isPass('lesser')).toBe(true)
+    expect(isPass('failure')).toBe(false)
   })
 })
 
-describe('contributionsOf', () => {
-  it('collects contributions from every chain', () => {
+describe('what a Context slot contributes', () => {
+  it('scores a face-up card by its own printed Contribution', () => {
     const G = emptyGameState()
-    placeInContext(G, 'TEST-OP-AGENT')       // cyan circle
-    G.contexts.push({ slots: [], closed: false, ceiling: 7, parentChainIx: null, ownerCardId: null })
-    placeInContext(G, 'TEST-OP-SCRATCHPAD', undefined, 1) // pink triangle
-
-    const contribs = contributionsOf(G)
-    expect(contribs).toHaveLength(2)
-    expect(contextSize(G)).toBe(2)
+    placeInContext(G, CARDS.cheap)
+    expect(slotContributions(G, G.contexts[0]!.slots[0]!))
+      .toEqual(getOperatorCard(CARDS.cheap).contributes)
   })
 
-  it('skips subverted slots', () => {
+  it('scores a subverted card as nothing', () => {
     const G = emptyGameState()
-    placeInContext(G, 'TEST-OP-AGENT')
+    placeInContext(G, CARDS.cheap)
     G.contexts[0]!.slots[0]!.subverted = true
-    expect(contributionsOf(G)).toHaveLength(0)
-    // ...but the card still counts toward context size vs par.
-    expect(contextSize(G)).toBe(1)
+    expect(slotContributions(G, G.contexts[0]!.slots[0]!)).toEqual([])
   })
 
-  it('includes injected pollution', () => {
+  it('scores a called server as the installed card, not the face-down one', () => {
     const G = emptyGameState()
-    G.injectedContributions = [c('pink', 'hexagon')]
-    expect(contributionsOf(G)).toHaveLength(1)
-  })
-
-  it('does NOT score RAG until a face-down call invokes it', () => {
-    const G = emptyGameState()
-    G.rag.chaptersComplete = 4
-    G.rag.contribution = [c('green', 'circle')]
-    // Installed, but nothing in the Context reaches for it.
-    expect(contributionsOf(G)).toHaveLength(0)
-
-    placeCall(G, 'TEST-OP-SCRATCHPAD', { kind: 'rag' })
-    expect(contributionsOf(G)).toEqual([c('green', 'circle')])
-  })
-
-  it('scores a called server as the installed Tool, not the face-down card', () => {
-    const G = emptyGameState()
-    G.servers = [{ id: 'srv-1', substrateCardId: 'TEST-OP-SCRATCHPAD',
-      traitCardId: 'TEST-OP-TOOL-WEBSEARCH', // amber circle
-      disabled: false,
-    }]
-    // The face-down card is a Durable Agent (green pentagon) — irrelevant.
-    placeCall(G, 'TEST-OP-DURABLE-AGENT', { kind: 'server', serverId: 'srv-1' })
-    expect(contributionsOf(G)).toEqual([c('amber', 'circle')])
+    const server = installServerDirect(G)
+    placeCall(G, CARDS.response, { kind: 'server', serverId: server.id })
+    expect(slotContributions(G, G.contexts[0]!.slots[0]!))
+      .toEqual(getOperatorCard(server.traitCardId).contributes)
   })
 
   it('scores a called Skill from its loadout attachment', () => {
     const G = emptyGameState()
-    G.skillAttachments = [{
-      loadoutId: 'TEST-EQ-LOCAL-RIG',
-      skillCardId: 'TEST-OP-SKILL-SUMMARIZE', // amber triangle
-    }]
-    placeCall(G, 'TEST-OP-SCRATCHPAD', { kind: 'skill', loadoutId: 'TEST-EQ-LOCAL-RIG' })
-    expect(contributionsOf(G)).toEqual([c('amber', 'triangle')])
+    G.skillAttachments = [{ loadoutId: CARDS.loadout, skillCardId: CARDS.attachable }]
+    placeCall(G, CARDS.response, { kind: 'skill', loadoutId: CARDS.loadout })
+    expect(slotContributions(G, G.contexts[0]!.slots[0]!))
+      .toEqual(getOperatorCard(CARDS.attachable).contributes)
   })
 
-  it('scores a closed Process (it closes out with or without results)', () => {
+  it('scores nothing for a live Ongoing threat that blanks its class', () => {
     const G = emptyGameState()
-    placeInContext(G, 'TEST-OP-AGENT')
-    G.contexts[0]!.closed = true
-    expect(contributionsOf(G)).toHaveLength(1)
+    placeInContext(G, CARDS.cheap) // produces attention
+    addThreat(G, CARDS.threatBlank)
+    expect(slotContributions(G, G.contexts[0]!.slots[0]!)).toEqual([])
   })
 })
 
-describe('scoreTier — the success ladder', () => {
-  const def: EvalCardDef = {
-    id: 'X', name: 'X', par: 4, superiorAt: 3, difficulty: 1, rulesText: '',
-    patterns: [{ kind: 'countAny', n: 1 }],
-  }
-  const met = [c('cyan', 'circle')]
-
-  it('superior at or under superiorAt', () => {
-    expect(scoreTier(met, 3, def)).toBe('superior')
+describe('gathering the whole board', () => {
+  it('collects from every context, nested ones included', () => {
+    const G = emptyGameState()
+    const child = addContext(G, 0)
+    placeInContext(G, CARDS.cheap, undefined, 0)
+    placeInContext(G, CARDS.cheap, undefined, child)
+    expect(contributionsOf(G)).toHaveLength(2)
+    expect(contextSize(G)).toBe(2)
   })
 
-  it('best between superiorAt and par', () => {
-    expect(scoreTier(met, 4, def)).toBe('best')
+  it('scores a closed context — it closes out with or without results', () => {
+    const G = emptyGameState()
+    placeInContext(G, CARDS.cheap)
+    G.contexts[0]!.closed = true
+    expect(contributionsOf(G)).toHaveLength(1)
   })
 
-  it('lesser over par — passed sloppily', () => {
-    expect(scoreTier(met, 5, def)).toBe('lesser')
+  it('includes injected junk', () => {
+    const G = emptyGameState()
+    G.injectedContributions = [c('pink', 'hexagon')]
+    expect(contributionsOf(G)).toEqual([c('pink', 'hexagon')])
+  })
+})
+
+describe('comparing objectives (Algorithmic Intervention)', () => {
+  it('rates identical hands as no difference', () => {
+    const hand = getEvalCard(CARDS.evalEasy).hand
+    expect(handDifference(hand, [...hand])).toBe(0)
   })
 
-  it('failure when the pattern is unmet, regardless of size', () => {
-    expect(scoreTier([], 1, def)).toBe('failure')
+  it('counts a swapped mark as two — one gone, one arrived', () => {
+    expect(handDifference(['cyan/*', 'amber/*'], ['cyan/*', 'violet/*'])).toBe(2)
   })
 
-  it('treats every tier but failure as a pass', () => {
-    expect(isPass('superior')).toBe(true)
-    expect(isPass('lesser')).toBe(true)
-    expect(isPass('failure')).toBe(false)
+  it('counts a length gap even when everything else matches', () => {
+    expect(handDifference(['cyan/*'], ['cyan/*', 'cyan/*'])).toBe(1)
   })
 
-  it('has no superior band when the eval offers none', () => {
-    const noSuperior: EvalCardDef = { ...def, superiorAt: undefined }
-    expect(scoreTier(met, 1, noSuperior)).toBe('best')
+  it('finds no neighbour when nothing is within the threshold', () => {
+    const G = emptyGameState()
+    G.currentEvalId = CARDS.evalEasy
+    G.evalDeck = [CARDS.evalHard]
+    // The two shipped objectives differ by five marks.
+    expect(handDifference(
+      getEvalCard(CARDS.evalEasy).hand,
+      getEvalCard(CARDS.evalHard).hand,
+    )).toBe(5)
+    expect(nearestEval(G, 2)).toBeNull()
+  })
+
+  it('finds the neighbour once the threshold reaches it', () => {
+    const G = emptyGameState()
+    G.currentEvalId = CARDS.evalEasy
+    G.evalDeck = [CARDS.evalHard]
+    expect(nearestEval(G, 5)).toBe(CARDS.evalHard)
   })
 })

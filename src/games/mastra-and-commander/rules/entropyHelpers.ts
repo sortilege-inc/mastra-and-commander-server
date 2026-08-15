@@ -13,7 +13,9 @@
  */
 import type { MCState } from '../types'
 import type { EntropyEffect } from '../cards/types'
-import { getEntropyCard, getOperatorCard } from '../cards/registry'
+import type { Pip } from '../constants'
+import { getEntropyCard, getEvalCard, getOperatorCard } from '../cards/registry'
+import { nearestEval } from './evalHelpers'
 import { feedEntropy, log } from './playHelpers'
 
 /**
@@ -150,6 +152,22 @@ export function applyEntropyEffect(
 
     // ── GOAL-HIJACK ──────────────────────────────────────────────────────
     case 'hijack': {
+      // A CONSTRAINED hijack (Algorithmic Intervention) swaps only to a near
+      // neighbour — an objective differing by at most `maxDifference` printed
+      // marks. If nothing in the deck is that close, it simply fizzles.
+      if (effect.maxDifference !== undefined) {
+        const near = nearestEval(G, effect.maxDifference)
+        if (near === null) {
+          log(G, 'No objective is close enough to swap to — the intervention fizzles.')
+          break
+        }
+        const previous = G.currentEvalId
+        G.currentEvalId = near
+        G.evalDeck.splice(G.evalDeck.indexOf(near), 1)
+        if (previous) G.evalDeck.push(previous)
+        log(G, `the eval was replaced with ${getEvalCard(near).name}`)
+        break
+      }
       // BEST-GUESS(Q14): minimal open swap — the objective is exchanged for the
       // next Eval card. The hidden true-objective layer the design flags as the
       // "signature mechanic" is deferred (it needs a hidden-information design
@@ -181,6 +199,30 @@ export function applyEntropyEffect(
       break
     }
 
+    // ── PERSISTENT ───────────────────────────────────────────────────────
+    case 'ongoing':
+      // Handled by the caller, which moves the card to the threat row rather
+      // than the discard. Nothing fires here — an Ongoing effect applies
+      // continuously, from the threat row, not once on resolution.
+      break
+
+    case 'initialize': {
+      // Fires once, now, then the card persists (usually attached).
+      if (effect.initialize.kind === 'attachAndBlank') {
+        const target = highestProducerOf(G, effect.initialize.by)
+        if (!target) {
+          log(G, 'Nothing in play to attach to — the effect fizzles.')
+          break
+        }
+        const slot = G.contexts[target.chainIx]?.slots[target.slotIx]
+        if (slot) {
+          slot.subverted = true
+          log(G, `attached to ${getOperatorCard(slot.cardId).name} — it no longer contributes`)
+        }
+      }
+      break
+    }
+
     case 'feedExtra':
       // Grows the stack mid-resolution; LIFO keeps popping, so these resolve
       // later in the same phase.
@@ -192,4 +234,58 @@ export function applyEntropyEffect(
 /** Label for the pending-gate payload, so the overlay can describe the choice. */
 export function describeEntropyCard(cardId: string): string {
   return getEntropyCard(cardId).name
+}
+
+/**
+ * The card in play producing the most of `pip`, for `attachAndBlank`.
+ *
+ * The target is DETERMINED, not chosen — Jailbreak says "your highest
+ * {automation} production card", so there is nothing for the Entropy player to
+ * pick. Ties go leftmost (first row, first slot) for replay determinism.
+ */
+export function highestProducerOf(
+  G: MCState,
+  pip: Pip,
+): { chainIx: number; slotIx: number } | null {
+  let best: { chainIx: number; slotIx: number } | null = null
+  let bestCount = 0
+
+  G.contexts.forEach((chain, chainIx) => {
+    chain.slots.forEach((slot, slotIx) => {
+      if (slot.subverted || slot.faceDown) return
+      const produced = getOperatorCard(slot.cardId).produce
+        .filter((p) => p === pip).length
+      if (produced > bestCount) {
+        bestCount = produced
+        best = { chainIx, slotIx }
+      }
+    })
+  })
+
+  return bestCount > 0 ? best : null
+}
+
+/** Does a live threat blank cards producing this pip? (PII Leak.) */
+export function threatBlanksProducersOf(G: MCState, cardId: string): boolean {
+  for (const threat of G.threats) {
+    const effect = getEntropyCard(threat.cardId).effect
+    if (effect.kind !== 'ongoing') continue
+    if (effect.ongoing.kind !== 'blankProducersOf') continue
+    if (getOperatorCard(cardId).produce.includes(effect.ongoing.pip)) return true
+  }
+  return false
+}
+
+/** Extra Entropy owed when a card enters a context, from live threats. */
+export function extraFeedFor(G: MCState, cardId: string): number {
+  let extra = 0
+  for (const threat of G.threats) {
+    const effect = getEntropyCard(threat.cardId).effect
+    if (effect.kind !== 'ongoing') continue
+    if (effect.ongoing.kind !== 'extraFeedOnProducer') continue
+    if (getOperatorCard(cardId).produce.includes(effect.ongoing.pip)) {
+      extra += effect.ongoing.n
+    }
+  }
+  return extra
 }
