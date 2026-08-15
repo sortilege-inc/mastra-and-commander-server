@@ -32,9 +32,10 @@ import {
   SKILL_ATTACH_ENTROPY, TOOL_SERVER_ENTROPY,
 } from '../constants'
 import type { MCState, CallTarget } from '../types'
-import { getFramework, getOperatorCard } from '../cards/registry'
+import {
+  asPitchable, cardKindOf, getFramework, getOperatorCard,
+} from '../cards/registry'
 import { extraFeedFor } from './entropyHelpers'
-import { asPitchable } from '../cards/registry'
 import { MODEL_CARDS } from '../cards/cardSet'
 import { contributionSize } from '../cards/types'
 import {
@@ -100,9 +101,13 @@ export function playToContext(
   if (!inHand(G, cardId)) return INVALID_MOVE
 
   const chain = G.contexts[processIx]!
+  // The operator deck now carries upgrades too, so a hand card is not
+  // necessarily playable into a context. REJECT rather than throw: this move is
+  // public, and a bad id should be an invalid move, not a crashed game.
+  if (cardKindOf(cardId) !== 'operator') return INVALID_MOVE
   const def = getOperatorCard(cardId)
   // Events and Responses have their own moves/phases.
-  if (def.event) return INVALID_MOVE // Events have their own move
+  if (def.event) return INVALID_MOVE
 
   // Framework: the first Agent each round is free — no cost, no Entropy.
   const framework = getFramework(G.frameworkId)
@@ -288,6 +293,7 @@ export function playEvent(
   if (G.phase !== 'play' || !canOperatorAct(G, playerID)) return INVALID_MOVE
   if (!inHand(G, cardId)) return INVALID_MOVE
 
+  if (cardKindOf(cardId) !== 'operator') return INVALID_MOVE
   const def = getOperatorCard(cardId)
   if (!def.event) return INVALID_MOVE
 
