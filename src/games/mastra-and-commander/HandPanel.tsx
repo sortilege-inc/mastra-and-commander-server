@@ -13,7 +13,6 @@ import { cardKindOf, cardName, getLoadout, getOperatorCard } from './cards/regis
 import { unimplementedNote } from './cards/unimplemented'
 import { C, btn } from './theme'
 import { CardFace } from './CardFace'
-import { TRAIT_EVENT, TRAIT_MODEL, TRAIT_RESPONSE } from './constants'
 import type { CallTarget } from './types'
 
 export function HandPanel({
@@ -51,12 +50,12 @@ export function HandPanel({
     const kind = cardKindOf(cardId)
     const def = kind === 'operator' ? getOperatorCard(cardId) : null
     const pitched = selectedPitches.includes(cardId)
-    const traits = def?.traits ?? []
-    const isEvent = traits.includes(TRAIT_EVENT)
-    const isResponse = traits.includes(TRAIT_RESPONSE)
-    const isModel = traits.includes(TRAIT_MODEL)
-    const isTool = traits.includes('Tool') || traits.includes('MCP')
-    const isSkill = traits.includes('Skill')
+    // What a card can do comes from what it PRINTS, not its subhead.
+    const isEvent = !!def?.event
+    const isResponse = !!def?.response
+    const isModel = kind === 'model'
+    const isTool = !!def?.mcp
+    const isSkill = !!def?.attach
     const isFeature = kind === 'feature'
 
     return (

@@ -23,7 +23,7 @@ import { log } from './playHelpers'
  * to EVERY row, parent and child alike (owner ruling), so it is computed from
  * the threat row rather than stored per chain.
  */
-export function rowCeiling(G: MCState, base = DEFAULT_CONTEXT_CEILING): number {
+export function contextCeiling(G: MCState, base = DEFAULT_CONTEXT_CEILING): number {
   let ceiling = base
   for (const threat of G.threats) {
     const effect = getEntropyCard(threat.cardId).effect
@@ -42,7 +42,7 @@ export function rowCeiling(G: MCState, base = DEFAULT_CONTEXT_CEILING): number {
  *                 opening Agent (which has no parent).
  * @returns the new row's index.
  */
-export function openAgentRow(
+export function openContext(
   G: MCState,
   parentIx: number | null,
   ceiling: number,
@@ -64,6 +64,6 @@ export function openAgentRow(
 
 /** Re-apply the current ceiling to every row (after a threat lands or leaves). */
 export function refreshCeilings(G: MCState, base = DEFAULT_CONTEXT_CEILING): void {
-  const ceiling = rowCeiling(G, base)
+  const ceiling = contextCeiling(G, base)
   for (const chain of G.contexts) chain.ceiling = ceiling
 }

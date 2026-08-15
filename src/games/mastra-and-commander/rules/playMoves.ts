@@ -3,11 +3,16 @@
  *
  * The placement rules (owner rulings, 2026-08-10) are the heart of this file:
  *
- *  - A **Tool** can be INSTALLED as an MCP server (the Tool plus a second card
+ * What a card can DO comes from what it PRINTS, never from its subhead: a card
+ * printing `MCP:` can be installed as a server, one printing `Attach:` can ride
+ * a loadout, and Events/Responses are identified by having those payloads. The
+ * subhead is flavour.
+ *
+ *  - A card printing `MCP:` can be INSTALLED as a server (it plus a second card
  *    face-down as the substrate, 2 Entropy — one per card) where it gains
  *    Durable and persists for the whole match; or played INLINE into the
  *    Context for 1 Entropy, where it does not.
- *  - A **Skill** can be ATTACHED to a loadout item (rig / cloud), gaining
+ *  - A card printing `Attach:` can be ATTACHED to a loadout item, gaining
  *    Durable; or played INLINE, where it does not.
  *  - Installed Tools, attached Skills, and a completed RAG track do NOT score
  *    on their own. You reach them by playing a card FACE-DOWN into the Context
@@ -15,10 +20,8 @@
  *    called resource's Contribution is what lands in the Context.
  *  - Face-down cards are SKIPPED for produce/consume: the chain looks through
  *    them to the last face-up card.
- *  - A **Subagent** opens its own sub-context with its own ceiling, whose cards
- *    do not count against the parent's ceiling.
- *  - The framework makes the first **Agent** each round free — no cost, no
- *    Entropy.
+ *  - Contexts are opened by Agent tokens, not by played cards (see
+ *    contextRows.ts). The framework makes the round's first Agent free.
  *
  * All moves here are Operator-only and guard on phase + open gates.
  */
@@ -26,13 +29,13 @@ import { INVALID_MOVE } from 'boardgame.io/core'
 import {
   CALL_ENTROPY, CLAW_COMPLETE_COUNT, DEFAULT_CONTEXT_CEILING, OPERATOR_SEAT,
   RAG_CHAPTERS, RAG_CLEAR_COUNT, RAG_RERANK_INDEX, RAG_UPSERT_INDEX,
-  SKILL_ATTACH_ENTROPY, TOOL_SERVER_ENTROPY, TRAIT_EVENT, TRAIT_MODEL,
-  TRAIT_SUBAGENT,
+  SKILL_ATTACH_ENTROPY, TOOL_SERVER_ENTROPY,
 } from '../constants'
 import type { MCState, CallTarget } from '../types'
 import { getFramework, getOperatorCard } from '../cards/registry'
 import { extraFeedFor } from './entropyHelpers'
 import { asPitchable } from '../cards/registry'
+import { MODEL_CARDS } from '../cards/cardSet'
 import { contributionSize } from '../cards/types'
 import {
   applyPlanToSources, chainOutputs, lastPayingSlot, planPayment, toPipCounts,
@@ -99,7 +102,7 @@ export function playToContext(
   const chain = G.contexts[processIx]!
   const def = getOperatorCard(cardId)
   // Events and Responses have their own moves/phases.
-  if (def.traits.includes(TRAIT_EVENT)) return INVALID_MOVE
+  if (def.event) return INVALID_MOVE // Events have their own move
 
   // Framework: the first Agent each round is free — no cost, no Entropy.
   const framework = getFramework(G.frameworkId)
@@ -154,18 +157,6 @@ export function playToContext(
     if (extra > 0) feedEntropy(G, extra, 'Model Collapse')
   }
 
-  // A Subagent opens its own context window; its cards don't count against
-  // this one's ceiling.
-  if (def.traits.includes(TRAIT_SUBAGENT)) {
-    G.contexts.push({
-      slots: [],
-      closed: false,
-      ceiling: chain.ceiling,
-      parentChainIx: processIx,
-      ownerCardId: cardId,
-    })
-    log(G, `${def.name} opened a sub-context (ceiling ${chain.ceiling})`)
-  }
 
   refillHand(G, `played ${def.name}`)
 }
@@ -298,7 +289,7 @@ export function playEvent(
   if (!inHand(G, cardId)) return INVALID_MOVE
 
   const def = getOperatorCard(cardId)
-  if (!def.traits.includes(TRAIT_EVENT) || !def.event) return INVALID_MOVE
+  if (!def.event) return INVALID_MOVE
 
   const pitchDefs = resolvePitches(G, pitchIds)
   if (!pitchDefs) return INVALID_MOVE
@@ -353,7 +344,8 @@ export function installServer(
   if (!inHand(G, substrateCardId) || !inHand(G, traitCardId)) return INVALID_MOVE
 
   const traitDef = getOperatorCard(traitCardId)
-  if (!traitDef.traits.includes('Tool') && !traitDef.traits.includes('MCP')) {
+  // It prints `MCP:` — that, not a subhead, is what makes it installable.
+  if (!traitDef.mcp) {
     return INVALID_MOVE
   }
 
@@ -403,7 +395,8 @@ export function attachSkill(
   if (G.skillAttachments.some((a) => a.loadoutId === loadoutId)) return INVALID_MOVE
 
   const def = getOperatorCard(cardId)
-  if (!def.traits.includes('Skill')) return INVALID_MOVE
+  // It prints `Attach:`.
+  if (!def.attach) return INVALID_MOVE
 
   const pitchDefs = resolvePitches(G, pitchIds)
   if (!pitchDefs) return INVALID_MOVE
@@ -542,7 +535,7 @@ export function upgradeModel(
   if (!inHand(G, cardId)) return INVALID_MOVE
 
   const def = getOperatorCard(cardId)
-  if (!def.traits.includes(TRAIT_MODEL)) return INVALID_MOVE
+  if (!MODEL_CARDS.some((m) => m.id === cardId)) return INVALID_MOVE
 
   const pitchDefs = resolvePitches(G, pitchIds)
   if (!pitchDefs) return INVALID_MOVE

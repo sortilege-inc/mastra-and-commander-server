@@ -14,7 +14,8 @@
 import type { MCState } from '../types'
 import type { EntropyEffect } from '../cards/types'
 import type { Pip } from '../constants'
-import { getEntropyCard, getOperatorCard } from '../cards/registry'
+import { getEntropyCard, getEvalCard, getOperatorCard } from '../cards/registry'
+import { nearestEval } from './evalHelpers'
 import { feedEntropy, log } from './playHelpers'
 
 /**
@@ -151,12 +152,20 @@ export function applyEntropyEffect(
 
     // ── GOAL-HIJACK ──────────────────────────────────────────────────────
     case 'hijack': {
-      if (effect.unimplemented) {
-        // Algorithmic Intervention's "differs by no more than two elements"
-        // needs the printed hand tokens to compare, which the eval defs do not
-        // carry yet. Doing a PLAIN hijack here would be wrong in the player's
-        // favour or against it at random, so it does nothing and says so.
-        log(G, 'Algorithmic Intervention is not wired yet — no objective swap.')
+      // A CONSTRAINED hijack (Algorithmic Intervention) swaps only to a near
+      // neighbour — an objective differing by at most `maxDifference` printed
+      // marks. If nothing in the deck is that close, it simply fizzles.
+      if (effect.maxDifference !== undefined) {
+        const near = nearestEval(G, effect.maxDifference)
+        if (near === null) {
+          log(G, 'No objective is close enough to swap to — the intervention fizzles.')
+          break
+        }
+        const previous = G.currentEvalId
+        G.currentEvalId = near
+        G.evalDeck.splice(G.evalDeck.indexOf(near), 1)
+        if (previous) G.evalDeck.push(previous)
+        log(G, `the eval was replaced with ${getEvalCard(near).name}`)
         break
       }
       // BEST-GUESS(Q14): minimal open swap — the objective is exchanged for the

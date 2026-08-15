@@ -1,7 +1,7 @@
 /**
  * The Context — the left→right window (design §4).
  *
- * One row per Agent in play. Each slot shows the card, its contributions
+ * One context per Agent in play. Each slot shows the card, its contributions
  * (the Eval currency), and its unspent outputs (which fund the next card).
  */
 import * as React from 'react'
@@ -55,8 +55,8 @@ export function ContextRow({
               }}
             >
               {parent === null
-                ? `Agent ${chainIx + 1}`
-                : `↳ Agent ${chainIx + 1} — subagent of Agent ${parent + 1}`}
+                ? `Context ${chainIx + 1}`
+                : `↳ Context ${chainIx + 1} — subagent of Context ${parent + 1}`}
               {chain.closed ? ' (closed)' : ''}
               {' '}
               <span style={{ fontWeight: 400, opacity: 0.75 }}>

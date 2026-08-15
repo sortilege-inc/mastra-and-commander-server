@@ -46,9 +46,6 @@ export function unimplementedNote(cardId: string): string | null {
     if (effect.kind === 'ongoing' && effect.trigger?.unimplemented) {
       return 'Its Trigger is not wired yet — it will not leave on its own.'
     }
-    if (effect.kind === 'hijack' && effect.unimplemented) {
-      return 'The constrained eval swap is not wired yet — it does nothing.'
-    }
     return null
   }
 

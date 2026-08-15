@@ -18,7 +18,7 @@ import { getLoadout, getEvalCard, getModel, getOperatorCard } from '../cards/reg
 import { contextSize, contributionsOf, isPass, scoreTier } from './evalHelpers'
 import { feedEntropy, log, refillHand } from './playHelpers'
 import { zeroPips } from './ioFlow'
-import { openAgentRow, rowCeiling } from './contextRows'
+import { openContext, contextCeiling } from './contextRows'
 
 /** Add pips to the round pool. */
 function grant(G: MCState, pips: Pip[], reason: string): void {
@@ -49,7 +49,7 @@ export function enterReveal(G: MCState): void {
 
   // The Objective may tighten (or loosen) the context ceiling; live threats
   // (Token Limiter) reduce it further.
-  const ceiling = rowCeiling(G, evalDef.contextCeiling ?? DEFAULT_CONTEXT_CEILING)
+  const ceiling = contextCeiling(G, evalDef.contextCeiling ?? DEFAULT_CONTEXT_CEILING)
   for (const chain of G.contexts) chain.ceiling = ceiling
   if (ceiling !== DEFAULT_CONTEXT_CEILING) {
     log(G, `context ceiling for this eval: ${ceiling}`)
@@ -58,7 +58,7 @@ export function enterReveal(G: MCState): void {
   // The round opens with an Agent token, which OWNS the first Context row
   // (owner ruling, 2026-08-13) — free, because Mastra makes the round's first
   // Agent free. Everything else is played INTO a row.
-  openAgentRow(G, null, ceiling, 'free via Mastra')
+  openContext(G, null, ceiling, 'free via Mastra')
   G.frameworkFreeAgentUsed = true
 
   // 2. Loadout auto-pitch (design §4: loadout "auto-pitches cards off the

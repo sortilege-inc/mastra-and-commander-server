@@ -28,8 +28,6 @@ export const MASTRA: FrameworkDef = {
   id: 'MASTRA',
   name: 'Mastra',
   freeTrait: 'Agent',
-  // Printed subhead is [TypeScript, Open Source]; 'Agent' is the trait the
-  // free-play rule keys on, and lives in freeTrait rather than the type line.
   rulesText: 'The first **Agent** played each round has no cost and incurs no Entropy.',
 }
 
@@ -56,9 +54,9 @@ export const OPERATOR_CARDS: OperatorCardDef[] = [
     id: 'OP-BROWSERBASE',
     name: 'Browserbase',
     supertype: 'persistent',
-    // Printed subhead is 'Browser'; 'Tool' is the mechanical trait that makes
-    // it installable as an MCP server.
-    traits: ['Tool', 'Browser'],
+    traits: ['Browser'],
+    // It prints `MCP:`, which is what makes it installable as a server.
+    mcp: true,
     consume: ['attention', 'technology'],
     produce: ['capital', 'attention'],
     contributes: [{ color: 'amber', shape: 'pentagon' }],
@@ -78,13 +76,17 @@ export const OPERATOR_CARDS: OperatorCardDef[] = [
     produce: ['attention'],
     contributes: [{ color: 'amber', shape: 'triangle' }],
     call: { kind: 'gainPips', pips: ['attention', 'attention'] },
+    // It prints `Attach:`, which is what lets it ride a loadout item.
+    attach: true,
     rulesText: '**Call:** Gain {attention}{attention}\n**Attach:** Gain *Durable*.',
   },
   {
     id: 'OP-HUMAN-IN-THE-LOOP',
     name: 'Human-in-the-Loop',
     supertype: 'ephemeral',
-    traits: ['Response'],
+    // No printed subhead. It is a Response because it HAS a response ability,
+    // not because of a label.
+    traits: [],
     consume: ['attention', 'attention'],
     produce: ['capital', 'capital'],
     contributes: [{ color: 'pink', shape: 'circle' }],
@@ -196,9 +198,7 @@ export const ENTROPY_CARDS: EntropyCardDef[] = [
     traits: ['Subversion'],
     // A CONSTRAINED hijack: not any objective, but a near neighbour. Split out
     // of Jailbreak in the Sam-feedback batch.
-    // NOT WIRED YET — "differs by no more than two elements" needs the printed
-    // hand tokens to compare, which the eval defs don't carry yet.
-    effect: { kind: 'hijack', unimplemented: true },
+    effect: { kind: 'hijack', maxDifference: 2 },
     rulesText: 'Replace the current eval with an eval that differs by no more '
       + 'than two elements.',
   },
@@ -221,7 +221,7 @@ export const EVAL_CARDS: EvalCardDef[] = [
     difficulty: 1,
     par: 4,
     traits: ['Consumer'],
-    // hand: [cyan/*, cyan/*, amber/*]
+    hand: ['cyan/*', 'cyan/*', 'amber/*'],
     patterns: [
       { kind: 'countOfColor', color: 'cyan', n: 2 },
       { kind: 'countOfColor', color: 'amber', n: 1 },
@@ -235,7 +235,7 @@ export const EVAL_CARDS: EvalCardDef[] = [
     difficulty: 2,
     par: 5,
     traits: ['Human Resources'],
-    // hand: [violet/*, violet/*, violet/*, amber/*]
+    hand: ['violet/*', 'violet/*', 'violet/*', 'amber/*'],
     patterns: [
       { kind: 'countOfColor', color: 'violet', n: 3 },
       { kind: 'countOfColor', color: 'amber', n: 1 },
@@ -251,8 +251,7 @@ export const MODEL_CARDS: ModelDef[] = [
   {
     id: 'MODEL-FABLE',
     name: 'Fable',
-    // Printed subhead is 'Anthropic'; 'Model' is the mechanical trait.
-    traits: ['Model', 'Anthropic'],
+    traits: ['Anthropic'],
     grants: [],
     // "Entropy 1:" is a COST — feed one Entropy card to the stack, then gain.
     activated: { cost: { entropy: 1 }, gain: ['attention', 'technology'] },
@@ -264,7 +263,7 @@ export const LOADOUT_CARDS: LoadoutDef[] = [
   {
     id: 'LOADOUT-SANDBOX',
     name: 'Sandbox',
-    traits: ['Loadout'],
+    traits: [],
     grants: [],
     activated: { cost: { pips: ['capital', 'attention'] }, gain: ['technology'], mill: 1 },
     slot: { capacity: 1 },

@@ -92,7 +92,7 @@ describe('matchPattern — nOfAShape / countAny / shapeAtLeast', () => {
 
 describe('matchEval', () => {
   const def: EvalCardDef = {
-    id: 'X', name: 'X', par: 5, difficulty: 2, rulesText: '',
+    id: 'X', name: 'X', hand: [], par: 5, difficulty: 2, rulesText: '',
     patterns: [{ kind: 'countAny', n: 2 }, { kind: 'noColor', color: 'pink' }],
   }
 
@@ -174,7 +174,7 @@ describe('contributionsOf', () => {
 
 describe('scoreTier — the success ladder', () => {
   const def: EvalCardDef = {
-    id: 'X', name: 'X', par: 4, superiorAt: 3, difficulty: 1, rulesText: '',
+    id: 'X', name: 'X', hand: [], par: 4, superiorAt: 3, difficulty: 1, rulesText: '',
     patterns: [{ kind: 'countAny', n: 1 }],
   }
   const met = [c('cyan', 'circle')]

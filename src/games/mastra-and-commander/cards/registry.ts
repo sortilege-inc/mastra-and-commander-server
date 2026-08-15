@@ -65,7 +65,7 @@ const HIDDEN_DEFS: Record<string, unknown> = {
     effect: { kind: 'none' }, rulesText: '',
   } satisfies EntropyCardDef,
   eval: {
-    id: HIDDEN_ID, name: 'Hidden objective', patterns: [], par: 0,
+    id: HIDDEN_ID, name: 'Hidden objective', hand: [], patterns: [], par: 0,
     difficulty: 1, rulesText: '',
   } satisfies EvalCardDef,
   feature: {

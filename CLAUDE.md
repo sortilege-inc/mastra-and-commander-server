@@ -8,10 +8,11 @@
   (the sister multi-game play engine). It is multi-game by design: framework
   code is game-agnostic; each game lives in its own subdirectory.
 - Current state: the round loop runs end to end on the owner's **first playable
-  15-card set** (2026-08-13). The **Context is a tree of Agent-owned rows** — a
-  row belongs to an Agent token, the round's first Agent is free via Mastra, and
-  each further Agent opens a child row. *Process is retired.* A TicTacToe
-  placeholder remains as a wiring baseline.
+  card set** (2026-08-13, 18 cards). Play happens in **contexts**: each context
+  is opened and owned by an **Agent token**, the round's first Agent is free via
+  Mastra, and every further Agent opens its own context nested under the one it
+  came from. *Process is retired.* A TicTacToe placeholder remains as a wiring
+  baseline. **Say "context"** — never "row" or "agent-owned row".
 - Card payloads the engine cannot act on yet carry an `unimplemented` flag and
   are surfaced on the board. **Never silently omit or fake a printed mechanic** —
   a half-built card must not pass for a working one.

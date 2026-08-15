@@ -129,9 +129,9 @@ export function SidePanels({ G }: { G: MCState }): React.ReactElement {
       <Section title="THIS ROUND">
         <div style={{ fontSize: '0.8rem', lineHeight: 1.7 }}>
           <div>
-            Agents {G.contexts.length}
+            Contexts {G.contexts.length}
             <span style={{ color: C.dim }}>
-              {' '}({G.contexts.length === 1 ? 'one row' : 'rows'}, ceiling{' '}
+              {' '}(ceiling{' '}
               {G.contexts[0]?.ceiling ?? '—'})
             </span>
           </div>

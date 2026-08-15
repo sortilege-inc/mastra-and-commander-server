@@ -20,10 +20,10 @@ ecosystem discounts.
 
 Key mechanics as of the 2026-08-13 rules pass:
 
-- **The Context is a tree of Agent-owned rows.** A row is owned by an **Agent
+- **Play happens in contexts.** Each context is opened and owned by an **Agent
   token**; the round opens with one (free via Mastra) and each further Agent
-  opens a **child row of the row it came from**. "Subagent" just means an Agent
-  opened when a row already exists. *Process is retired.*
+  opens its own context, nested under the one it came from. "Subagent" just
+  means an Agent opened when a context already exists. *Process is retired.*
 - **Agent tokens come only from a supply** — put into play by cards that spawn
   them (Parallelism), never drawn or bought.
 - **Ongoing Entropy persists on a threat row** until its `Trigger:` clears it,
@@ -41,8 +41,8 @@ Key mechanics as of the 2026-08-13 rules pass:
 - Pips print as **Value / Attention / Automation / Wild**; the internal keys stay
   `capital`/`attention`/`technology`/`generic`, matching the design repo's
   `deck.rb` aliases.
-- Each row holds **7 cards** by default, less any Ongoing reduction; a child
-  row's cards don't count against its parent's.
+- Each context holds **7 cards** by default, less any Ongoing reduction; a
+  nested context's cards don't count against its parent's.
 - **Models, loadouts and features live in the operator deck** as findable
   upgrades, so Y-Combinator's tutor has something to find. No separate Features
   deck.

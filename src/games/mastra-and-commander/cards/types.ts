@@ -88,9 +88,19 @@ export interface OperatorCardDef {
   name: string
   /** Minimal supertype — NOT a card-type taxonomy (the design has none yet). */
   supertype: Supertype
-  /** Freeform FFG-style type line, e.g. ['Agent'], ['Tool'], ['Event']. The
-   *  engine only branches on the few traits named in constants.ts. */
+  /**
+   * Printed subhead, e.g. ['Browser'], ['Anthropic'].
+   *
+   * FLAVOUR ONLY — no rule keys off it. The card is already typed by its kind,
+   * and what it can DO comes from the abilities it prints: `mcp` for a card
+   * installable as an MCP server, `attach` for one that attaches to a loadout,
+   * and the presence of `event` / `response` / `call` payloads.
+   */
   traits: string[]
+  /** Prints `MCP:` — may be installed as an MCP server for Durable. */
+  mcp?: true
+  /** Prints `Attach:` — may attach to a loadout item for Durable. */
+  attach?: true
   /** Input cost, right edge. ≤5 pips. */
   consume: Pip[]
   /** Output currencies for the next card in the chain, left edge. ≤5 pips. */
@@ -128,7 +138,12 @@ export type EntropyEffect =
   /** GOAL-HIJACK: swap the objective the Operator is scored against.
    *  BEST-GUESS(Q14): minimal open swap with the next Eval card — the hidden
    *  true-objective layer is deferred. */
-  | ({ kind: 'hijack' } & MaybeUnimplemented)
+  | {
+      kind: 'hijack'
+      /** Constrained swap: only to an objective differing by at most this many
+       *  printed hand marks (Algorithmic Intervention). Omit for a free swap. */
+      maxDifference?: number
+    }
   /** Destroy an installed server (the attack surface of design §4). Targeted. */
   | { kind: 'attackServer' }
   /** Targeted-entropy event (design §4: e.g. US-Gov vs Chinese models) — hits a
@@ -204,9 +219,20 @@ export type EvalPattern =
   /** A specific shape appears at least N times. */
   | { kind: 'shapeAtLeast'; shape: Shape; n: number }
 
+/**
+ * One printed mark in an Objective's target hand.
+ *
+ * Grammar from cards.yml: `color/shape` exact · `color/*` that colour, any
+ * shape · `*_/shape` that shape, any colour · `!color` banned · `*` any.
+ */
+export type HandToken = string
+
 export interface EvalCardDef {
   id: string
   name: string
+  /** The printed hand, verbatim. Algorithmic Intervention compares these to
+   *  find an objective "differing by no more than two elements". */
+  hand: HandToken[]
   /** Printed subhead, e.g. ['Consumer']. Flavour only — no rules hang on it. */
   traits?: string[]
   /** ALL patterns must hold to pass the eval. */

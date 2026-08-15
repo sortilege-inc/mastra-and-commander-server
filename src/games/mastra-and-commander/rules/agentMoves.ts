@@ -14,7 +14,7 @@ import type { MCState } from '../types'
 import { getLoadout, getModel, getOperatorCard } from '../cards/registry'
 import { FEATURE_CARDS, LOADOUT_CARDS, MODEL_CARDS } from '../cards/cardSet'
 import type { MoveCtx } from './playMoves'
-import { openAgentRow, rowCeiling } from './contextRows'
+import { openContext, contextCeiling } from './contextRows'
 import { feedEntropy, log, refillHand, removeFromHands } from './playHelpers'
 import { planPayment, applyPlanToSources, toPipCounts } from './ioFlow'
 
@@ -51,9 +51,9 @@ export function spawnAgents(
   G.operatorDiscard.push(cardId)
   log(G, `played ${def.name}`)
 
-  const ceiling = rowCeiling(G, DEFAULT_CONTEXT_CEILING)
+  const ceiling = contextCeiling(G, DEFAULT_CONTEXT_CEILING)
   for (let i = 0; i < def.effect.n; i++) {
-    openAgentRow(G, parentChainIx, ceiling, `spawned by ${def.name}`)
+    openContext(G, parentChainIx, ceiling, `spawned by ${def.name}`)
   }
   // One feed for the whole card, not one per Agent.
   feedEntropy(G, def.effect.entropy, def.name)
