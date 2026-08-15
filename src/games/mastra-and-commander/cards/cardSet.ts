@@ -28,6 +28,8 @@ export const MASTRA: FrameworkDef = {
   id: 'MASTRA',
   name: 'Mastra',
   freeTrait: 'Agent',
+  // Printed subhead is [TypeScript, Open Source]; 'Agent' is the trait the
+  // free-play rule keys on, and lives in freeTrait rather than the type line.
   rulesText: 'The first **Agent** played each round has no cost and incurs no Entropy.',
 }
 
@@ -51,12 +53,14 @@ export const AGENT_TOKEN: TokenDef = {
 
 export const OPERATOR_CARDS: OperatorCardDef[] = [
   {
-    id: 'OP-AGENTBROWSER',
-    name: 'AgentBrowser',
+    id: 'OP-BROWSERBASE',
+    name: 'Browserbase',
     supertype: 'persistent',
-    traits: ['Tool'],
-    consume: ['attention'],
-    produce: ['technology', 'generic'],
+    // Printed subhead is 'Browser'; 'Tool' is the mechanical trait that makes
+    // it installable as an MCP server.
+    traits: ['Tool', 'Browser'],
+    consume: ['attention', 'technology'],
+    produce: ['capital', 'attention'],
     contributes: [{ color: 'amber', shape: 'pentagon' }],
     // "Call: Draw 1. Discard 1. Do not add entropy." — the no-entropy clause is
     // already true of every call, so it reads as reassurance, not an exception.
@@ -90,8 +94,8 @@ export const OPERATOR_CARDS: OperatorCardDef[] = [
       + 'If you do, discard five cards from the top of the operator deck.',
   },
   {
-    id: 'OP-Y-COMBINATOR',
-    name: 'Y-Combinator',
+    id: 'OP-YC',
+    name: 'YC',
     supertype: 'ephemeral',
     traits: ['Event'],
     consume: ['attention', 'technology'],
@@ -105,16 +109,47 @@ export const OPERATOR_CARDS: OperatorCardDef[] = [
   },
 ]
 
+/**
+ * Workshop stubs — real cards with no mechanics yet ("STUB — mechanics TBD").
+ *
+ * Defined so their ids, names and art exist, but deliberately LEFT OUT of
+ * DECK_RECIPE: a card that does nothing is a dead draw, and salting the deck
+ * with them would distort a playtest. Add them to the recipe once designed.
+ * They are unrelated to each other and are NOT a "rant" archetype.
+ */
+export const STUB_CARDS: OperatorCardDef[] = [
+  {
+    id: 'OP-DARIOS-AI-DOOM',
+    name: "Dario's AI Doom",
+    supertype: 'ephemeral',
+    traits: [],
+    consume: [],
+    produce: [],
+    contributes: [],
+    rulesText: 'STUB — mechanics TBD.',
+  },
+  {
+    id: 'OP-THEO-RANT',
+    name: 'Theo Rant',
+    supertype: 'ephemeral',
+    traits: [],
+    consume: [],
+    produce: [],
+    contributes: [],
+    rulesText: 'STUB — mechanics TBD.',
+  },
+]
+
 // ── Features ──────────────────────────────────────────────────────────────
 
 export const FEATURE_CARDS: FeatureCardDef[] = [
   {
-    id: 'FEAT-PARALLELISM',
-    name: 'Parallelism',
+    id: 'FEAT-PARALLEL-SUBAGENTS',
+    name: 'Parallel Subagents',
     traits: ['Concurrency'],
     // The only Agent source in the set besides Mastra's free first one.
     effect: { kind: 'spawnAgents', n: 2, entropy: 1 },
-    rulesText: 'Spawn two subagents.\n**Resolve:** Only 1 entropy is added this way.',
+    rulesText: 'Put two Agent tokens into play. **Entropy 1.**',
   },
 ]
 
@@ -124,10 +159,10 @@ export const ENTROPY_CARDS: EntropyCardDef[] = [
   {
     id: 'EN-TOKEN-LIMITER',
     name: 'Token Limiter',
-    traits: ['Noise'],
+    traits: ['Constraint'],
     // Ongoing: every row's ceiling drops by 1 while this is on the threat row.
     effect: { kind: 'ongoing', ongoing: { kind: 'ceilingReduction', n: 1 } },
-    rulesText: 'Maximum context per agent is reduced by 1.',
+    rulesText: '**Ongoing:** Each context holds one fewer card.',
   },
   {
     id: 'EN-PII-LEAK',
@@ -156,6 +191,18 @@ export const ENTROPY_CARDS: EntropyCardDef[] = [
       + 'card in play. That card no longer contributes to your eval.',
   },
   {
+    id: 'EN-ALGORITHMIC-INTERVENTION',
+    name: 'Algorithmic Intervention',
+    traits: ['Subversion'],
+    // A CONSTRAINED hijack: not any objective, but a near neighbour. Split out
+    // of Jailbreak in the Sam-feedback batch.
+    // NOT WIRED YET — "differs by no more than two elements" needs the printed
+    // hand tokens to compare, which the eval defs don't carry yet.
+    effect: { kind: 'hijack', unimplemented: true },
+    rulesText: 'Replace the current eval with an eval that differs by no more '
+      + 'than two elements.',
+  },
+  {
     id: 'EN-MODEL-COLLAPSE',
     name: 'Model Collapse',
     traits: ['Pollution'],
@@ -173,6 +220,7 @@ export const EVAL_CARDS: EvalCardDef[] = [
     name: 'Personal Tech Support',
     difficulty: 1,
     par: 4,
+    traits: ['Consumer'],
     // hand: [cyan/*, cyan/*, amber/*]
     patterns: [
       { kind: 'countOfColor', color: 'cyan', n: 2 },
@@ -186,6 +234,7 @@ export const EVAL_CARDS: EvalCardDef[] = [
     name: 'Recruiter Agent',
     difficulty: 2,
     par: 5,
+    traits: ['Human Resources'],
     // hand: [violet/*, violet/*, violet/*, amber/*]
     patterns: [
       { kind: 'countOfColor', color: 'violet', n: 3 },
@@ -202,6 +251,7 @@ export const MODEL_CARDS: ModelDef[] = [
   {
     id: 'MODEL-FABLE',
     name: 'Fable',
+    // Printed subhead is 'Anthropic'; 'Model' is the mechanical trait.
     traits: ['Model', 'Anthropic'],
     grants: [],
     // "Entropy 1:" is a COST — feed one Entropy card to the stack, then gain.
@@ -234,21 +284,22 @@ export const LOADOUT_CARDS: LoadoutDef[] = [
 export const DECK_RECIPE = {
   /** Operator deck: the four operator cards, plus findable upgrades. */
   operator: {
-    'OP-AGENTBROWSER': 5,
+    'OP-BROWSERBASE': 5,
     'OP-SOCIAL-MEDIA-MANAGER': 5,
     'OP-HUMAN-IN-THE-LOOP': 4,
-    'OP-Y-COMBINATOR': 3,
+    'OP-YC': 3,
     // Upgrades live in the operator deck so Y-Combinator's tutor can find them
     // (owner ruling). One of each is already in play at setup.
     'MODEL-FABLE': 2,
     'LOADOUT-SANDBOX': 2,
-    'FEAT-PARALLELISM': 3,
+    'FEAT-PARALLEL-SUBAGENTS': 3,
   } as Record<string, number>,
   /** Entropy deck — the stack draws from here all match. */
   entropy: {
     'EN-TOKEN-LIMITER': 4,
     'EN-PII-LEAK': 3,
-    'EN-JAILBREAK': 4,
+    'EN-JAILBREAK': 3,
+    'EN-ALGORITHMIC-INTERVENTION': 3,
     'EN-MODEL-COLLAPSE': 4,
   } as Record<string, number>,
   /** Objectives, one revealed per round. */

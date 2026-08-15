@@ -18,6 +18,9 @@ import { LOADOUT_CARDS, MODEL_CARDS, ENTROPY_CARDS } from './cardSet'
 export function unimplementedNote(cardId: string): string | null {
   if (hasOperatorCard(cardId)) {
     const def = getOperatorCard(cardId)
+    if (def.rulesText.startsWith('STUB')) {
+      return 'Mechanics not designed yet — this card does nothing.'
+    }
     if (def.event?.kind === 'tutor' && def.event.unimplemented) {
       return 'Search-your-deck is not wired yet.'
     }
@@ -42,6 +45,9 @@ export function unimplementedNote(cardId: string): string | null {
     const effect = getEntropyCard(cardId).effect
     if (effect.kind === 'ongoing' && effect.trigger?.unimplemented) {
       return 'Its Trigger is not wired yet — it will not leave on its own.'
+    }
+    if (effect.kind === 'hijack' && effect.unimplemented) {
+      return 'The constrained eval swap is not wired yet — it does nothing.'
     }
     return null
   }

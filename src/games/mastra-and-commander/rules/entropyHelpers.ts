@@ -151,6 +151,14 @@ export function applyEntropyEffect(
 
     // ── GOAL-HIJACK ──────────────────────────────────────────────────────
     case 'hijack': {
+      if (effect.unimplemented) {
+        // Algorithmic Intervention's "differs by no more than two elements"
+        // needs the printed hand tokens to compare, which the eval defs do not
+        // carry yet. Doing a PLAIN hijack here would be wrong in the player's
+        // favour or against it at random, so it does nothing and says so.
+        log(G, 'Algorithmic Intervention is not wired yet — no objective swap.')
+        break
+      }
       // BEST-GUESS(Q14): minimal open swap — the objective is exchanged for the
       // next Eval card. The hidden true-objective layer the design flags as the
       // "signature mechanic" is deferred (it needs a hidden-information design

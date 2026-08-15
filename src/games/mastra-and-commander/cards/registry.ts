@@ -16,7 +16,7 @@ import type {
 } from './types'
 import {
   AGENT_TOKEN, ENTROPY_CARDS, EVAL_CARDS, FEATURE_CARDS, LOADOUT_CARDS,
-  MASTRA, MODEL_CARDS, OPERATOR_CARDS,
+  MASTRA, MODEL_CARDS, OPERATOR_CARDS, STUB_CARDS,
 } from './cardSet'
 
 function index<T extends { id: string }>(defs: T[]): Record<string, T> {
@@ -28,7 +28,8 @@ function index<T extends { id: string }>(defs: T[]): Record<string, T> {
   return map
 }
 
-const OPERATOR_BY_ID = index(OPERATOR_CARDS)
+// Stubs are registered (so their ids and art resolve) but are not dealt.
+const OPERATOR_BY_ID = index([...OPERATOR_CARDS, ...STUB_CARDS])
 const ENTROPY_BY_ID = index(ENTROPY_CARDS)
 const EVAL_BY_ID = index(EVAL_CARDS)
 const FEATURE_BY_ID = index(FEATURE_CARDS)

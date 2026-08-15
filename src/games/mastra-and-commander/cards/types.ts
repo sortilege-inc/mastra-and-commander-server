@@ -128,7 +128,7 @@ export type EntropyEffect =
   /** GOAL-HIJACK: swap the objective the Operator is scored against.
    *  BEST-GUESS(Q14): minimal open swap with the next Eval card — the hidden
    *  true-objective layer is deferred. */
-  | { kind: 'hijack' }
+  | ({ kind: 'hijack' } & MaybeUnimplemented)
   /** Destroy an installed server (the attack surface of design §4). Targeted. */
   | { kind: 'attackServer' }
   /** Targeted-entropy event (design §4: e.g. US-Gov vs Chinese models) — hits a
@@ -207,6 +207,8 @@ export type EvalPattern =
 export interface EvalCardDef {
   id: string
   name: string
+  /** Printed subhead, e.g. ['Consumer']. Flavour only — no rules hang on it. */
+  traits?: string[]
   /** ALL patterns must hold to pass the eval. */
   patterns: EvalPattern[]
   /** Context size at or under which the pass counts as `best` (design: par). */
